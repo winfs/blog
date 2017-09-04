@@ -17,6 +17,7 @@ class ArticleController extends Controller
     public function index()
     {
         $articles = $this->article->paginate(config('blog.article.number'), config('blog.article.sort'), config('blog.article.sortColumn'));
-        dd($articles);
+
+        return view('article.index', compact('articles'));
     }
 }
