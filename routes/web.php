@@ -11,5 +11,24 @@
 |
 */
 
+// Search
+Route::get('search', 'HomeController@search');
+
+// Link
+Route::get('link', 'LinkController@index');
+
+// Category
+Route::group(['prefix' => 'category'], function() {
+    Route::get('/', 'CategoryController@index');
+    Route::get('{category}', 'CategoryController@show');
+});
+
+// Tag
+Route::group(['prefix' => 'tag'], function() {
+    Route::get('/', 'TagController@index');
+    Route::get('{tag}', 'TagController@show');
+});
+
 // Article
 Route::get('/', 'ArticleController@index');
+Route::get('{slug}', 'ArticleController@show');

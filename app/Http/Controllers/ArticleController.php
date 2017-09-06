@@ -20,4 +20,11 @@ class ArticleController extends Controller
 
         return view('article.index', compact('articles'));
     }
+
+    public function show($slug)
+    {
+        $article = $this->article->getBySlug($slug);
+
+        return view('article.show', compact('article'));
+    }
 }

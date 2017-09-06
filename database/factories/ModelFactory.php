@@ -57,3 +57,11 @@ $factory->define(App\Models\Tag::class, function (Faker\Generator $faker) {
         'meta_description' => $faker->sentence,
     ];
 });
+$factory->define(App\Models\Link::class, function (Faker\Generator $faker) {
+    return [
+        'name'  => $faker->name,
+        'link'  => $faker->url,
+        'image' => $faker->imageUrl()
+    ];
+});
+
