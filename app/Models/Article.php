@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\User;
 use App\Tools\Markdowner;
 use App\Scopes\DraftScope;
 use Illuminate\Database\Eloquent\Model;
@@ -35,9 +36,14 @@ class Article extends Model
         static::addGlobalScope(new DraftScope());
     }
 
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function category()
     {
-        $this->belongsTo(Category::class);
+        return $this->belongsTo(Category::class);
     }
 
     /**

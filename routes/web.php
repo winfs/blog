@@ -11,6 +11,17 @@
 |
 */
 
+// User Auth
+Auth::routes();
+
+// Github Auth Route
+Route::group(['prefix' => 'auth/github', 'namespace' => 'Auth'], function() {
+    Route::get('/', 'AuthController@redirectToProvider');
+    Route::get('callback', 'AuthController@handleProviderCallback');
+    Route::get('register', 'AuthController@create');
+    Route::post('register', 'AuthController@store');
+});
+
 // Search
 Route::get('search', 'HomeController@search');
 

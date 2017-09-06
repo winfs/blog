@@ -16,11 +16,19 @@ $factory->define(App\User::class, function (Faker\Generator $faker) {
     static $password;
 
     return [
-        'name' => $faker->name,
-        'email' => $faker->unique()->safeEmail,
-        'password' => $password ?: $password = bcrypt('secret'),
+        'name'           => $faker->name,
+        'email'          => $faker->safeEmail,
+        'status'         => true,
+        'confirm_code'   => str_random(64),
+        'password'       => $password ?: $password = bcrypt('secret'),
         'remember_token' => str_random(10),
     ];
+});
+
+$factory->defineAs(App\User::class, 'admin', function () use ($factory) {
+    $user = $factory->raw(App\User::class);
+
+    return array_merge($user, ['is_admin' => 1, 'password' => bcrypt('admin')]);
 });
 
 $factory->define(App\Models\Category::class, function (Faker\Generator $faker) {
