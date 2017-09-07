@@ -20,4 +20,14 @@ class UserRepository
     {
         return $this->model->where('github_id', $githubId)->first();
     }
+
+    public function getByName($name)
+    {
+        return $this->model->where('name', $name)->firstOrFail();
+    }
+
+    public function changePassword($user, $password)
+    {
+        return $user->update(['password' => bcrypt($password)]);
+    }
 }

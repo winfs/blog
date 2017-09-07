@@ -13,6 +13,7 @@
 
 // User Auth
 Auth::routes();
+Route::post('password/change', 'UserController@changePassword')->middleware('auth');
 
 // Github Auth Route
 Route::group(['prefix' => 'auth/github', 'namespace' => 'Auth'], function() {
@@ -20,6 +21,21 @@ Route::group(['prefix' => 'auth/github', 'namespace' => 'Auth'], function() {
     Route::get('callback', 'AuthController@handleProviderCallback');
     Route::get('register', 'AuthController@create');
     Route::post('register', 'AuthController@store');
+});
+
+// User
+Route::group(['prefix' => 'user', 'middleware' => 'auth'], function() {
+    Route::get('profile', 'UserController@edit');
+    Route::put('profile/{id}', 'UserController@update');
+    Route::group(['prefix' => '{username}'], function() {
+        Route::get('/', 'UserController@show');
+    });
+});
+
+// User Setting
+Route::group(['middleware' => 'auth', 'prefix' => 'setting'], function() {
+    Route::get('/', 'SettingController@index')->name('setting.index');
+    Route::get('binding', 'SettingController@binding')->name('setting.binding');
 });
 
 // Search
