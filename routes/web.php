@@ -29,6 +29,7 @@ Route::group(['prefix' => 'user', 'middleware' => 'auth'], function() {
     Route::put('profile/{id}', 'UserController@update');
     Route::group(['prefix' => '{username}'], function() {
         Route::get('/', 'UserController@show');
+        Route::get('comments', 'UserController@comments');
     });
 });
 

@@ -15,11 +15,16 @@
     "cropperjs": "^1.0.0",
     "cross-env": "^5.0.1",
     "emojione": "^3.1.2",
+    "fine-uploader": "^5.15.0",
     "ionicons": "^2.0.1",
     "jquery": "^3.1.1",
     "laravel-mix": "^1.0",
     "lodash": "^4.17.4",
     "marked": "^0.3.6",
+    "path-to-regexp": "^2.0.0",
+    "sweetalert": "^2.0.2",
+    "toastr": "^2.1.2",
+    "v-textcomplete": "^0.2.5",
     "vue": "^2.1.10"
   }
 }

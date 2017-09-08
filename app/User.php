@@ -2,6 +2,7 @@
 
 namespace App;
 
+use App\Models\Comment;
 use App\Scopes\StatusScope;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -38,6 +39,11 @@ class User extends Authenticatable
         parent::boot();
 
         static::addGlobalScope(new StatusScope());
+    }
+
+    public function comments()
+    {
+        return $this->hasMany(Comment::class)->orderBy('created_at', 'desc');
     }
 
     public function getAvatarAttribute($value)

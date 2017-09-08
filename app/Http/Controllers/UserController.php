@@ -20,8 +20,9 @@ class UserController extends Controller
     public function show($username)
     {
         $user = $this->user->getByName($username);
+        $comments = $user->comments->take(10);
 
-        return view('user.index', compact('user'));
+        return view('user.index', compact('user', 'comments'));
     }
 
     public function edit()
@@ -42,6 +43,15 @@ class UserController extends Controller
         $this->user->update($id, $input);
 
         return redirect()->back();
+    }
+
+    public function comments($username)
+    {
+        $user = $this->user->getByName($username);
+
+        $comments = $user->comments;
+
+        return view('user.comments', compact('user', 'comments'));
     }
 
     public function changePassword(Request $request)

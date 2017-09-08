@@ -44,6 +44,20 @@
             </div>
         </div>
     </div>
+
+    @if(Auth::guest())
+        <comment title="评论"
+                 commentable-type="articles"
+                 commentable-id="{{ $article->id }}"></comment>
+    @else
+        <comment title="评论"
+                 username="{{ Auth::user()->name }}"
+                 user-avatar="{{ Auth::user()->avatar }}"
+                 commentable-type="articles"
+                 commentable-id="{{ $article->id }}"
+                 can-comment></comment>
+    @endif
+
 @endsection
 
 @section('scripts')

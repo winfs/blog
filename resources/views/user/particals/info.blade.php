@@ -46,9 +46,9 @@
                         @endif
                     </div>
                 </div>
-                {{--
                 <div class="col-sm-5 user-follow">
                     <div class="row">
+                        {{--
                         <div class="col-xs-4">
                             <a href="{{ url("user/{$user->name}/following") }}" class="counter">{{ $user->followings()->count() }}</a>
                             <a href="{{ url("user/{$user->name}/following") }}" class="text">{{ lang('Following Num') }}</a>
@@ -57,13 +57,13 @@
                             <a href="{{ url("user/{$user->name}/discussions") }}" class="counter">{{ $user->discussions->count() }}</a>
                             <a href="{{ url("user/{$user->name}/discussions") }}" class="text">{{ lang('Discussion Num') }}</a>
                         </div>
+                        --}}
                         <div class="col-xs-4">
                             <a href="{{ url("user/{$user->name}/comments") }}" class="counter">{{ $user->comments->count() }}</a>
                             <a href="{{ url("user/{$user->name}/comments") }}" class="text">{{ lang('Comment Num') }}</a>
                         </div>
                     </div>
                 </div>
-                --}}
             </div>
         </div>
     </div>

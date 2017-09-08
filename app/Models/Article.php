@@ -54,6 +54,14 @@ class Article extends Model
         return $this->morphToMany(Tag::class, 'taggable');
     }
 
+    /**
+     * 获得此文章下的所有评论
+     */
+    public function comments()
+    {
+        return $this->morphMany(Comment::class, 'commentable');
+    }
+
     public function getCreatedAtAttribute($value)
     {
         return \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $value)->diffForHumans();

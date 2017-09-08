@@ -65,6 +65,18 @@ $factory->define(App\Models\Tag::class, function (Faker\Generator $faker) {
         'meta_description' => $faker->sentence,
     ];
 });
+
+$factory->define(App\Models\Comment::class, function (Faker\Generator $faker) {
+    $user_ids = \App\User::pluck('id')->random();
+    $article_ids = \App\Models\Article::pluck('id')->random();
+    return [
+        'user_id' => $user_ids,
+        'commentable_id' => $article_ids,
+        'commentable_type' => 'App\Models\Article',
+        'content' => $faker->paragraph
+    ];
+});
+
 $factory->define(App\Models\Link::class, function (Faker\Generator $faker) {
     return [
         'name'  => $faker->name,
@@ -72,4 +84,3 @@ $factory->define(App\Models\Link::class, function (Faker\Generator $faker) {
         'image' => $faker->imageUrl()
     ];
 });
-

@@ -57,13 +57,1892 @@
 /******/ 	__webpack_require__.o = function(object, property) { return Object.prototype.hasOwnProperty.call(object, property); };
 /******/
 /******/ 	// __webpack_public_path__
-/******/ 	__webpack_require__.p = "";
+/******/ 	__webpack_require__.p = "/";
 /******/
 /******/ 	// Load entry module and return exports
 /******/ 	return __webpack_require__(__webpack_require__.s = 1);
 /******/ })
 /************************************************************************/
 /******/ ({
+
+/***/ "./node_modules/_axios@0.16.2@axios/index.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+module.exports = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/axios.js");
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/adapters/xhr.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+var settle = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/core/settle.js");
+var buildURL = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/buildURL.js");
+var parseHeaders = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/parseHeaders.js");
+var isURLSameOrigin = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/isURLSameOrigin.js");
+var createError = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/core/createError.js");
+var btoa = (typeof window !== 'undefined' && window.btoa && window.btoa.bind(window)) || __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/btoa.js");
+
+module.exports = function xhrAdapter(config) {
+  return new Promise(function dispatchXhrRequest(resolve, reject) {
+    var requestData = config.data;
+    var requestHeaders = config.headers;
+
+    if (utils.isFormData(requestData)) {
+      delete requestHeaders['Content-Type']; // Let the browser set it
+    }
+
+    var request = new XMLHttpRequest();
+    var loadEvent = 'onreadystatechange';
+    var xDomain = false;
+
+    // For IE 8/9 CORS support
+    // Only supports POST and GET calls and doesn't returns the response headers.
+    // DON'T do this for testing b/c XMLHttpRequest is mocked, not XDomainRequest.
+    if ("development" !== 'test' &&
+        typeof window !== 'undefined' &&
+        window.XDomainRequest && !('withCredentials' in request) &&
+        !isURLSameOrigin(config.url)) {
+      request = new window.XDomainRequest();
+      loadEvent = 'onload';
+      xDomain = true;
+      request.onprogress = function handleProgress() {};
+      request.ontimeout = function handleTimeout() {};
+    }
+
+    // HTTP basic authentication
+    if (config.auth) {
+      var username = config.auth.username || '';
+      var password = config.auth.password || '';
+      requestHeaders.Authorization = 'Basic ' + btoa(username + ':' + password);
+    }
+
+    request.open(config.method.toUpperCase(), buildURL(config.url, config.params, config.paramsSerializer), true);
+
+    // Set the request timeout in MS
+    request.timeout = config.timeout;
+
+    // Listen for ready state
+    request[loadEvent] = function handleLoad() {
+      if (!request || (request.readyState !== 4 && !xDomain)) {
+        return;
+      }
+
+      // The request errored out and we didn't get a response, this will be
+      // handled by onerror instead
+      // With one exception: request that using file: protocol, most browsers
+      // will return status as 0 even though it's a successful request
+      if (request.status === 0 && !(request.responseURL && request.responseURL.indexOf('file:') === 0)) {
+        return;
+      }
+
+      // Prepare the response
+      var responseHeaders = 'getAllResponseHeaders' in request ? parseHeaders(request.getAllResponseHeaders()) : null;
+      var responseData = !config.responseType || config.responseType === 'text' ? request.responseText : request.response;
+      var response = {
+        data: responseData,
+        // IE sends 1223 instead of 204 (https://github.com/mzabriskie/axios/issues/201)
+        status: request.status === 1223 ? 204 : request.status,
+        statusText: request.status === 1223 ? 'No Content' : request.statusText,
+        headers: responseHeaders,
+        config: config,
+        request: request
+      };
+
+      settle(resolve, reject, response);
+
+      // Clean up request
+      request = null;
+    };
+
+    // Handle low level network errors
+    request.onerror = function handleError() {
+      // Real errors are hidden from us by the browser
+      // onerror should only fire if it's a network error
+      reject(createError('Network Error', config, null, request));
+
+      // Clean up request
+      request = null;
+    };
+
+    // Handle timeout
+    request.ontimeout = function handleTimeout() {
+      reject(createError('timeout of ' + config.timeout + 'ms exceeded', config, 'ECONNABORTED',
+        request));
+
+      // Clean up request
+      request = null;
+    };
+
+    // Add xsrf header
+    // This is only done if running in a standard browser environment.
+    // Specifically not if we're in a web worker, or react-native.
+    if (utils.isStandardBrowserEnv()) {
+      var cookies = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/cookies.js");
+
+      // Add xsrf header
+      var xsrfValue = (config.withCredentials || isURLSameOrigin(config.url)) && config.xsrfCookieName ?
+          cookies.read(config.xsrfCookieName) :
+          undefined;
+
+      if (xsrfValue) {
+        requestHeaders[config.xsrfHeaderName] = xsrfValue;
+      }
+    }
+
+    // Add headers to the request
+    if ('setRequestHeader' in request) {
+      utils.forEach(requestHeaders, function setRequestHeader(val, key) {
+        if (typeof requestData === 'undefined' && key.toLowerCase() === 'content-type') {
+          // Remove Content-Type if data is undefined
+          delete requestHeaders[key];
+        } else {
+          // Otherwise add header to the request
+          request.setRequestHeader(key, val);
+        }
+      });
+    }
+
+    // Add withCredentials to request if needed
+    if (config.withCredentials) {
+      request.withCredentials = true;
+    }
+
+    // Add responseType to request if needed
+    if (config.responseType) {
+      try {
+        request.responseType = config.responseType;
+      } catch (e) {
+        // Expected DOMException thrown by browsers not compatible XMLHttpRequest Level 2.
+        // But, this can be suppressed for 'json' type as it can be parsed by default 'transformResponse' function.
+        if (config.responseType !== 'json') {
+          throw e;
+        }
+      }
+    }
+
+    // Handle progress if needed
+    if (typeof config.onDownloadProgress === 'function') {
+      request.addEventListener('progress', config.onDownloadProgress);
+    }
+
+    // Not all browsers support upload events
+    if (typeof config.onUploadProgress === 'function' && request.upload) {
+      request.upload.addEventListener('progress', config.onUploadProgress);
+    }
+
+    if (config.cancelToken) {
+      // Handle cancellation
+      config.cancelToken.promise.then(function onCanceled(cancel) {
+        if (!request) {
+          return;
+        }
+
+        request.abort();
+        reject(cancel);
+        // Clean up request
+        request = null;
+      });
+    }
+
+    if (requestData === undefined) {
+      requestData = null;
+    }
+
+    // Send the request
+    request.send(requestData);
+  });
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/axios.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+var bind = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/bind.js");
+var Axios = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/core/Axios.js");
+var defaults = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/defaults.js");
+
+/**
+ * Create an instance of Axios
+ *
+ * @param {Object} defaultConfig The default config for the instance
+ * @return {Axios} A new instance of Axios
+ */
+function createInstance(defaultConfig) {
+  var context = new Axios(defaultConfig);
+  var instance = bind(Axios.prototype.request, context);
+
+  // Copy axios.prototype to instance
+  utils.extend(instance, Axios.prototype, context);
+
+  // Copy context to instance
+  utils.extend(instance, context);
+
+  return instance;
+}
+
+// Create the default instance to be exported
+var axios = createInstance(defaults);
+
+// Expose Axios class to allow class inheritance
+axios.Axios = Axios;
+
+// Factory for creating new instances
+axios.create = function create(instanceConfig) {
+  return createInstance(utils.merge(defaults, instanceConfig));
+};
+
+// Expose Cancel & CancelToken
+axios.Cancel = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/cancel/Cancel.js");
+axios.CancelToken = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/cancel/CancelToken.js");
+axios.isCancel = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/cancel/isCancel.js");
+
+// Expose all/spread
+axios.all = function all(promises) {
+  return Promise.all(promises);
+};
+axios.spread = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/spread.js");
+
+module.exports = axios;
+
+// Allow use of default import syntax in TypeScript
+module.exports.default = axios;
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/cancel/Cancel.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * A `Cancel` is an object that is thrown when an operation is canceled.
+ *
+ * @class
+ * @param {string=} message The message.
+ */
+function Cancel(message) {
+  this.message = message;
+}
+
+Cancel.prototype.toString = function toString() {
+  return 'Cancel' + (this.message ? ': ' + this.message : '');
+};
+
+Cancel.prototype.__CANCEL__ = true;
+
+module.exports = Cancel;
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/cancel/CancelToken.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var Cancel = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/cancel/Cancel.js");
+
+/**
+ * A `CancelToken` is an object that can be used to request cancellation of an operation.
+ *
+ * @class
+ * @param {Function} executor The executor function.
+ */
+function CancelToken(executor) {
+  if (typeof executor !== 'function') {
+    throw new TypeError('executor must be a function.');
+  }
+
+  var resolvePromise;
+  this.promise = new Promise(function promiseExecutor(resolve) {
+    resolvePromise = resolve;
+  });
+
+  var token = this;
+  executor(function cancel(message) {
+    if (token.reason) {
+      // Cancellation has already been requested
+      return;
+    }
+
+    token.reason = new Cancel(message);
+    resolvePromise(token.reason);
+  });
+}
+
+/**
+ * Throws a `Cancel` if cancellation has been requested.
+ */
+CancelToken.prototype.throwIfRequested = function throwIfRequested() {
+  if (this.reason) {
+    throw this.reason;
+  }
+};
+
+/**
+ * Returns an object that contains a new `CancelToken` and a function that, when called,
+ * cancels the `CancelToken`.
+ */
+CancelToken.source = function source() {
+  var cancel;
+  var token = new CancelToken(function executor(c) {
+    cancel = c;
+  });
+  return {
+    token: token,
+    cancel: cancel
+  };
+};
+
+module.exports = CancelToken;
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/cancel/isCancel.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = function isCancel(value) {
+  return !!(value && value.__CANCEL__);
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/core/Axios.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var defaults = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/defaults.js");
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+var InterceptorManager = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/core/InterceptorManager.js");
+var dispatchRequest = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/core/dispatchRequest.js");
+var isAbsoluteURL = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/isAbsoluteURL.js");
+var combineURLs = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/combineURLs.js");
+
+/**
+ * Create a new instance of Axios
+ *
+ * @param {Object} instanceConfig The default config for the instance
+ */
+function Axios(instanceConfig) {
+  this.defaults = instanceConfig;
+  this.interceptors = {
+    request: new InterceptorManager(),
+    response: new InterceptorManager()
+  };
+}
+
+/**
+ * Dispatch a request
+ *
+ * @param {Object} config The config specific for this request (merged with this.defaults)
+ */
+Axios.prototype.request = function request(config) {
+  /*eslint no-param-reassign:0*/
+  // Allow for axios('example/url'[, config]) a la fetch API
+  if (typeof config === 'string') {
+    config = utils.merge({
+      url: arguments[0]
+    }, arguments[1]);
+  }
+
+  config = utils.merge(defaults, this.defaults, { method: 'get' }, config);
+  config.method = config.method.toLowerCase();
+
+  // Support baseURL config
+  if (config.baseURL && !isAbsoluteURL(config.url)) {
+    config.url = combineURLs(config.baseURL, config.url);
+  }
+
+  // Hook up interceptors middleware
+  var chain = [dispatchRequest, undefined];
+  var promise = Promise.resolve(config);
+
+  this.interceptors.request.forEach(function unshiftRequestInterceptors(interceptor) {
+    chain.unshift(interceptor.fulfilled, interceptor.rejected);
+  });
+
+  this.interceptors.response.forEach(function pushResponseInterceptors(interceptor) {
+    chain.push(interceptor.fulfilled, interceptor.rejected);
+  });
+
+  while (chain.length) {
+    promise = promise.then(chain.shift(), chain.shift());
+  }
+
+  return promise;
+};
+
+// Provide aliases for supported request methods
+utils.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData(method) {
+  /*eslint func-names:0*/
+  Axios.prototype[method] = function(url, config) {
+    return this.request(utils.merge(config || {}, {
+      method: method,
+      url: url
+    }));
+  };
+});
+
+utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
+  /*eslint func-names:0*/
+  Axios.prototype[method] = function(url, data, config) {
+    return this.request(utils.merge(config || {}, {
+      method: method,
+      url: url,
+      data: data
+    }));
+  };
+});
+
+module.exports = Axios;
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/core/InterceptorManager.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+
+function InterceptorManager() {
+  this.handlers = [];
+}
+
+/**
+ * Add a new interceptor to the stack
+ *
+ * @param {Function} fulfilled The function to handle `then` for a `Promise`
+ * @param {Function} rejected The function to handle `reject` for a `Promise`
+ *
+ * @return {Number} An ID used to remove interceptor later
+ */
+InterceptorManager.prototype.use = function use(fulfilled, rejected) {
+  this.handlers.push({
+    fulfilled: fulfilled,
+    rejected: rejected
+  });
+  return this.handlers.length - 1;
+};
+
+/**
+ * Remove an interceptor from the stack
+ *
+ * @param {Number} id The ID that was returned by `use`
+ */
+InterceptorManager.prototype.eject = function eject(id) {
+  if (this.handlers[id]) {
+    this.handlers[id] = null;
+  }
+};
+
+/**
+ * Iterate over all the registered interceptors
+ *
+ * This method is particularly useful for skipping over any
+ * interceptors that may have become `null` calling `eject`.
+ *
+ * @param {Function} fn The function to call for each interceptor
+ */
+InterceptorManager.prototype.forEach = function forEach(fn) {
+  utils.forEach(this.handlers, function forEachHandler(h) {
+    if (h !== null) {
+      fn(h);
+    }
+  });
+};
+
+module.exports = InterceptorManager;
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/core/createError.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var enhanceError = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/core/enhanceError.js");
+
+/**
+ * Create an Error with the specified message, config, error code, request and response.
+ *
+ * @param {string} message The error message.
+ * @param {Object} config The config.
+ * @param {string} [code] The error code (for example, 'ECONNABORTED').
+ * @param {Object} [request] The request.
+ * @param {Object} [response] The response.
+ * @returns {Error} The created error.
+ */
+module.exports = function createError(message, config, code, request, response) {
+  var error = new Error(message);
+  return enhanceError(error, config, code, request, response);
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/core/dispatchRequest.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+var transformData = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/core/transformData.js");
+var isCancel = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/cancel/isCancel.js");
+var defaults = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/defaults.js");
+
+/**
+ * Throws a `Cancel` if cancellation has been requested.
+ */
+function throwIfCancellationRequested(config) {
+  if (config.cancelToken) {
+    config.cancelToken.throwIfRequested();
+  }
+}
+
+/**
+ * Dispatch a request to the server using the configured adapter.
+ *
+ * @param {object} config The config that is to be used for the request
+ * @returns {Promise} The Promise to be fulfilled
+ */
+module.exports = function dispatchRequest(config) {
+  throwIfCancellationRequested(config);
+
+  // Ensure headers exist
+  config.headers = config.headers || {};
+
+  // Transform request data
+  config.data = transformData(
+    config.data,
+    config.headers,
+    config.transformRequest
+  );
+
+  // Flatten headers
+  config.headers = utils.merge(
+    config.headers.common || {},
+    config.headers[config.method] || {},
+    config.headers || {}
+  );
+
+  utils.forEach(
+    ['delete', 'get', 'head', 'post', 'put', 'patch', 'common'],
+    function cleanHeaderConfig(method) {
+      delete config.headers[method];
+    }
+  );
+
+  var adapter = config.adapter || defaults.adapter;
+
+  return adapter(config).then(function onAdapterResolution(response) {
+    throwIfCancellationRequested(config);
+
+    // Transform response data
+    response.data = transformData(
+      response.data,
+      response.headers,
+      config.transformResponse
+    );
+
+    return response;
+  }, function onAdapterRejection(reason) {
+    if (!isCancel(reason)) {
+      throwIfCancellationRequested(config);
+
+      // Transform response data
+      if (reason && reason.response) {
+        reason.response.data = transformData(
+          reason.response.data,
+          reason.response.headers,
+          config.transformResponse
+        );
+      }
+    }
+
+    return Promise.reject(reason);
+  });
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/core/enhanceError.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * Update an Error with the specified config, error code, and response.
+ *
+ * @param {Error} error The error to update.
+ * @param {Object} config The config.
+ * @param {string} [code] The error code (for example, 'ECONNABORTED').
+ * @param {Object} [request] The request.
+ * @param {Object} [response] The response.
+ * @returns {Error} The error.
+ */
+module.exports = function enhanceError(error, config, code, request, response) {
+  error.config = config;
+  if (code) {
+    error.code = code;
+  }
+  error.request = request;
+  error.response = response;
+  return error;
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/core/settle.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var createError = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/core/createError.js");
+
+/**
+ * Resolve or reject a Promise based on response status.
+ *
+ * @param {Function} resolve A function that resolves the promise.
+ * @param {Function} reject A function that rejects the promise.
+ * @param {object} response The response.
+ */
+module.exports = function settle(resolve, reject, response) {
+  var validateStatus = response.config.validateStatus;
+  // Note: status is not exposed by XDomainRequest
+  if (!response.status || !validateStatus || validateStatus(response.status)) {
+    resolve(response);
+  } else {
+    reject(createError(
+      'Request failed with status code ' + response.status,
+      response.config,
+      null,
+      response.request,
+      response
+    ));
+  }
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/core/transformData.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+
+/**
+ * Transform the data for a request or a response
+ *
+ * @param {Object|String} data The data to be transformed
+ * @param {Array} headers The headers for the request or response
+ * @param {Array|Function} fns A single function or Array of functions
+ * @returns {*} The resulting transformed data
+ */
+module.exports = function transformData(data, headers, fns) {
+  /*eslint no-param-reassign:0*/
+  utils.forEach(fns, function transform(fn) {
+    data = fn(data, headers);
+  });
+
+  return data;
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/defaults.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+/* WEBPACK VAR INJECTION */(function(process) {
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+var normalizeHeaderName = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/normalizeHeaderName.js");
+
+var DEFAULT_CONTENT_TYPE = {
+  'Content-Type': 'application/x-www-form-urlencoded'
+};
+
+function setContentTypeIfUnset(headers, value) {
+  if (!utils.isUndefined(headers) && utils.isUndefined(headers['Content-Type'])) {
+    headers['Content-Type'] = value;
+  }
+}
+
+function getDefaultAdapter() {
+  var adapter;
+  if (typeof XMLHttpRequest !== 'undefined') {
+    // For browsers use XHR adapter
+    adapter = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/adapters/xhr.js");
+  } else if (typeof process !== 'undefined') {
+    // For node use HTTP adapter
+    adapter = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/adapters/xhr.js");
+  }
+  return adapter;
+}
+
+var defaults = {
+  adapter: getDefaultAdapter(),
+
+  transformRequest: [function transformRequest(data, headers) {
+    normalizeHeaderName(headers, 'Content-Type');
+    if (utils.isFormData(data) ||
+      utils.isArrayBuffer(data) ||
+      utils.isBuffer(data) ||
+      utils.isStream(data) ||
+      utils.isFile(data) ||
+      utils.isBlob(data)
+    ) {
+      return data;
+    }
+    if (utils.isArrayBufferView(data)) {
+      return data.buffer;
+    }
+    if (utils.isURLSearchParams(data)) {
+      setContentTypeIfUnset(headers, 'application/x-www-form-urlencoded;charset=utf-8');
+      return data.toString();
+    }
+    if (utils.isObject(data)) {
+      setContentTypeIfUnset(headers, 'application/json;charset=utf-8');
+      return JSON.stringify(data);
+    }
+    return data;
+  }],
+
+  transformResponse: [function transformResponse(data) {
+    /*eslint no-param-reassign:0*/
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (e) { /* Ignore */ }
+    }
+    return data;
+  }],
+
+  timeout: 0,
+
+  xsrfCookieName: 'XSRF-TOKEN',
+  xsrfHeaderName: 'X-XSRF-TOKEN',
+
+  maxContentLength: -1,
+
+  validateStatus: function validateStatus(status) {
+    return status >= 200 && status < 300;
+  }
+};
+
+defaults.headers = {
+  common: {
+    'Accept': 'application/json, text/plain, */*'
+  }
+};
+
+utils.forEach(['delete', 'get', 'head'], function forEachMethodNoData(method) {
+  defaults.headers[method] = {};
+});
+
+utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
+  defaults.headers[method] = utils.merge(DEFAULT_CONTENT_TYPE);
+});
+
+module.exports = defaults;
+
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__("./node_modules/_process@0.11.10@process/browser.js")))
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/bind.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = function bind(fn, thisArg) {
+  return function wrap() {
+    var args = new Array(arguments.length);
+    for (var i = 0; i < args.length; i++) {
+      args[i] = arguments[i];
+    }
+    return fn.apply(thisArg, args);
+  };
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/btoa.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+// btoa polyfill for IE<10 courtesy https://github.com/davidchambers/Base64.js
+
+var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+
+function E() {
+  this.message = 'String contains an invalid character';
+}
+E.prototype = new Error;
+E.prototype.code = 5;
+E.prototype.name = 'InvalidCharacterError';
+
+function btoa(input) {
+  var str = String(input);
+  var output = '';
+  for (
+    // initialize result and counter
+    var block, charCode, idx = 0, map = chars;
+    // if the next str index does not exist:
+    //   change the mapping table to "="
+    //   check if d has no fractional digits
+    str.charAt(idx | 0) || (map = '=', idx % 1);
+    // "8 - idx % 1 * 8" generates the sequence 2, 4, 6, 8
+    output += map.charAt(63 & block >> 8 - idx % 1 * 8)
+  ) {
+    charCode = str.charCodeAt(idx += 3 / 4);
+    if (charCode > 0xFF) {
+      throw new E();
+    }
+    block = block << 8 | charCode;
+  }
+  return output;
+}
+
+module.exports = btoa;
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/buildURL.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+
+function encode(val) {
+  return encodeURIComponent(val).
+    replace(/%40/gi, '@').
+    replace(/%3A/gi, ':').
+    replace(/%24/g, '$').
+    replace(/%2C/gi, ',').
+    replace(/%20/g, '+').
+    replace(/%5B/gi, '[').
+    replace(/%5D/gi, ']');
+}
+
+/**
+ * Build a URL by appending params to the end
+ *
+ * @param {string} url The base of the url (e.g., http://www.google.com)
+ * @param {object} [params] The params to be appended
+ * @returns {string} The formatted url
+ */
+module.exports = function buildURL(url, params, paramsSerializer) {
+  /*eslint no-param-reassign:0*/
+  if (!params) {
+    return url;
+  }
+
+  var serializedParams;
+  if (paramsSerializer) {
+    serializedParams = paramsSerializer(params);
+  } else if (utils.isURLSearchParams(params)) {
+    serializedParams = params.toString();
+  } else {
+    var parts = [];
+
+    utils.forEach(params, function serialize(val, key) {
+      if (val === null || typeof val === 'undefined') {
+        return;
+      }
+
+      if (utils.isArray(val)) {
+        key = key + '[]';
+      }
+
+      if (!utils.isArray(val)) {
+        val = [val];
+      }
+
+      utils.forEach(val, function parseValue(v) {
+        if (utils.isDate(v)) {
+          v = v.toISOString();
+        } else if (utils.isObject(v)) {
+          v = JSON.stringify(v);
+        }
+        parts.push(encode(key) + '=' + encode(v));
+      });
+    });
+
+    serializedParams = parts.join('&');
+  }
+
+  if (serializedParams) {
+    url += (url.indexOf('?') === -1 ? '?' : '&') + serializedParams;
+  }
+
+  return url;
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/combineURLs.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * Creates a new URL by combining the specified URLs
+ *
+ * @param {string} baseURL The base URL
+ * @param {string} relativeURL The relative URL
+ * @returns {string} The combined URL
+ */
+module.exports = function combineURLs(baseURL, relativeURL) {
+  return relativeURL
+    ? baseURL.replace(/\/+$/, '') + '/' + relativeURL.replace(/^\/+/, '')
+    : baseURL;
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/cookies.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+
+module.exports = (
+  utils.isStandardBrowserEnv() ?
+
+  // Standard browser envs support document.cookie
+  (function standardBrowserEnv() {
+    return {
+      write: function write(name, value, expires, path, domain, secure) {
+        var cookie = [];
+        cookie.push(name + '=' + encodeURIComponent(value));
+
+        if (utils.isNumber(expires)) {
+          cookie.push('expires=' + new Date(expires).toGMTString());
+        }
+
+        if (utils.isString(path)) {
+          cookie.push('path=' + path);
+        }
+
+        if (utils.isString(domain)) {
+          cookie.push('domain=' + domain);
+        }
+
+        if (secure === true) {
+          cookie.push('secure');
+        }
+
+        document.cookie = cookie.join('; ');
+      },
+
+      read: function read(name) {
+        var match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+        return (match ? decodeURIComponent(match[3]) : null);
+      },
+
+      remove: function remove(name) {
+        this.write(name, '', Date.now() - 86400000);
+      }
+    };
+  })() :
+
+  // Non standard browser env (web workers, react-native) lack needed support.
+  (function nonStandardBrowserEnv() {
+    return {
+      write: function write() {},
+      read: function read() { return null; },
+      remove: function remove() {}
+    };
+  })()
+);
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/isAbsoluteURL.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * Determines whether the specified URL is absolute
+ *
+ * @param {string} url The URL to test
+ * @returns {boolean} True if the specified URL is absolute, otherwise false
+ */
+module.exports = function isAbsoluteURL(url) {
+  // A URL is considered absolute if it begins with "<scheme>://" or "//" (protocol-relative URL).
+  // RFC 3986 defines scheme name as a sequence of characters beginning with a letter and followed
+  // by any combination of letters, digits, plus, period, or hyphen.
+  return /^([a-z][a-z\d\+\-\.]*:)?\/\//i.test(url);
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/isURLSameOrigin.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+
+module.exports = (
+  utils.isStandardBrowserEnv() ?
+
+  // Standard browser envs have full support of the APIs needed to test
+  // whether the request URL is of the same origin as current location.
+  (function standardBrowserEnv() {
+    var msie = /(msie|trident)/i.test(navigator.userAgent);
+    var urlParsingNode = document.createElement('a');
+    var originURL;
+
+    /**
+    * Parse a URL to discover it's components
+    *
+    * @param {String} url The URL to be parsed
+    * @returns {Object}
+    */
+    function resolveURL(url) {
+      var href = url;
+
+      if (msie) {
+        // IE needs attribute set twice to normalize properties
+        urlParsingNode.setAttribute('href', href);
+        href = urlParsingNode.href;
+      }
+
+      urlParsingNode.setAttribute('href', href);
+
+      // urlParsingNode provides the UrlUtils interface - http://url.spec.whatwg.org/#urlutils
+      return {
+        href: urlParsingNode.href,
+        protocol: urlParsingNode.protocol ? urlParsingNode.protocol.replace(/:$/, '') : '',
+        host: urlParsingNode.host,
+        search: urlParsingNode.search ? urlParsingNode.search.replace(/^\?/, '') : '',
+        hash: urlParsingNode.hash ? urlParsingNode.hash.replace(/^#/, '') : '',
+        hostname: urlParsingNode.hostname,
+        port: urlParsingNode.port,
+        pathname: (urlParsingNode.pathname.charAt(0) === '/') ?
+                  urlParsingNode.pathname :
+                  '/' + urlParsingNode.pathname
+      };
+    }
+
+    originURL = resolveURL(window.location.href);
+
+    /**
+    * Determine if a URL shares the same origin as the current location
+    *
+    * @param {String} requestURL The URL to test
+    * @returns {boolean} True if URL shares the same origin, otherwise false
+    */
+    return function isURLSameOrigin(requestURL) {
+      var parsed = (utils.isString(requestURL)) ? resolveURL(requestURL) : requestURL;
+      return (parsed.protocol === originURL.protocol &&
+            parsed.host === originURL.host);
+    };
+  })() :
+
+  // Non standard browser envs (web workers, react-native) lack needed support.
+  (function nonStandardBrowserEnv() {
+    return function isURLSameOrigin() {
+      return true;
+    };
+  })()
+);
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/normalizeHeaderName.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+
+module.exports = function normalizeHeaderName(headers, normalizedName) {
+  utils.forEach(headers, function processHeader(value, name) {
+    if (name !== normalizedName && name.toUpperCase() === normalizedName.toUpperCase()) {
+      headers[normalizedName] = value;
+      delete headers[name];
+    }
+  });
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/parseHeaders.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var utils = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/utils.js");
+
+/**
+ * Parse headers into an object
+ *
+ * ```
+ * Date: Wed, 27 Aug 2014 08:58:49 GMT
+ * Content-Type: application/json
+ * Connection: keep-alive
+ * Transfer-Encoding: chunked
+ * ```
+ *
+ * @param {String} headers Headers needing to be parsed
+ * @returns {Object} Headers parsed into an object
+ */
+module.exports = function parseHeaders(headers) {
+  var parsed = {};
+  var key;
+  var val;
+  var i;
+
+  if (!headers) { return parsed; }
+
+  utils.forEach(headers.split('\n'), function parser(line) {
+    i = line.indexOf(':');
+    key = utils.trim(line.substr(0, i)).toLowerCase();
+    val = utils.trim(line.substr(i + 1));
+
+    if (key) {
+      parsed[key] = parsed[key] ? parsed[key] + ', ' + val : val;
+    }
+  });
+
+  return parsed;
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/helpers/spread.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * Syntactic sugar for invoking a function and expanding an array for arguments.
+ *
+ * Common use case would be to use `Function.prototype.apply`.
+ *
+ *  ```js
+ *  function f(x, y, z) {}
+ *  var args = [1, 2, 3];
+ *  f.apply(null, args);
+ *  ```
+ *
+ * With `spread` this example can be re-written.
+ *
+ *  ```js
+ *  spread(function(x, y, z) {})([1, 2, 3]);
+ *  ```
+ *
+ * @param {Function} callback
+ * @returns {Function}
+ */
+module.exports = function spread(callback) {
+  return function wrap(arr) {
+    return callback.apply(null, arr);
+  };
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_axios@0.16.2@axios/lib/utils.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var bind = __webpack_require__("./node_modules/_axios@0.16.2@axios/lib/helpers/bind.js");
+var isBuffer = __webpack_require__("./node_modules/_is-buffer@1.1.5@is-buffer/index.js");
+
+/*global toString:true*/
+
+// utils is a library of generic helper functions non-specific to axios
+
+var toString = Object.prototype.toString;
+
+/**
+ * Determine if a value is an Array
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is an Array, otherwise false
+ */
+function isArray(val) {
+  return toString.call(val) === '[object Array]';
+}
+
+/**
+ * Determine if a value is an ArrayBuffer
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is an ArrayBuffer, otherwise false
+ */
+function isArrayBuffer(val) {
+  return toString.call(val) === '[object ArrayBuffer]';
+}
+
+/**
+ * Determine if a value is a FormData
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is an FormData, otherwise false
+ */
+function isFormData(val) {
+  return (typeof FormData !== 'undefined') && (val instanceof FormData);
+}
+
+/**
+ * Determine if a value is a view on an ArrayBuffer
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a view on an ArrayBuffer, otherwise false
+ */
+function isArrayBufferView(val) {
+  var result;
+  if ((typeof ArrayBuffer !== 'undefined') && (ArrayBuffer.isView)) {
+    result = ArrayBuffer.isView(val);
+  } else {
+    result = (val) && (val.buffer) && (val.buffer instanceof ArrayBuffer);
+  }
+  return result;
+}
+
+/**
+ * Determine if a value is a String
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a String, otherwise false
+ */
+function isString(val) {
+  return typeof val === 'string';
+}
+
+/**
+ * Determine if a value is a Number
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Number, otherwise false
+ */
+function isNumber(val) {
+  return typeof val === 'number';
+}
+
+/**
+ * Determine if a value is undefined
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if the value is undefined, otherwise false
+ */
+function isUndefined(val) {
+  return typeof val === 'undefined';
+}
+
+/**
+ * Determine if a value is an Object
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is an Object, otherwise false
+ */
+function isObject(val) {
+  return val !== null && typeof val === 'object';
+}
+
+/**
+ * Determine if a value is a Date
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Date, otherwise false
+ */
+function isDate(val) {
+  return toString.call(val) === '[object Date]';
+}
+
+/**
+ * Determine if a value is a File
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a File, otherwise false
+ */
+function isFile(val) {
+  return toString.call(val) === '[object File]';
+}
+
+/**
+ * Determine if a value is a Blob
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Blob, otherwise false
+ */
+function isBlob(val) {
+  return toString.call(val) === '[object Blob]';
+}
+
+/**
+ * Determine if a value is a Function
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Function, otherwise false
+ */
+function isFunction(val) {
+  return toString.call(val) === '[object Function]';
+}
+
+/**
+ * Determine if a value is a Stream
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Stream, otherwise false
+ */
+function isStream(val) {
+  return isObject(val) && isFunction(val.pipe);
+}
+
+/**
+ * Determine if a value is a URLSearchParams object
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a URLSearchParams object, otherwise false
+ */
+function isURLSearchParams(val) {
+  return typeof URLSearchParams !== 'undefined' && val instanceof URLSearchParams;
+}
+
+/**
+ * Trim excess whitespace off the beginning and end of a string
+ *
+ * @param {String} str The String to trim
+ * @returns {String} The String freed of excess whitespace
+ */
+function trim(str) {
+  return str.replace(/^\s*/, '').replace(/\s*$/, '');
+}
+
+/**
+ * Determine if we're running in a standard browser environment
+ *
+ * This allows axios to run in a web worker, and react-native.
+ * Both environments support XMLHttpRequest, but not fully standard globals.
+ *
+ * web workers:
+ *  typeof window -> undefined
+ *  typeof document -> undefined
+ *
+ * react-native:
+ *  navigator.product -> 'ReactNative'
+ */
+function isStandardBrowserEnv() {
+  if (typeof navigator !== 'undefined' && navigator.product === 'ReactNative') {
+    return false;
+  }
+  return (
+    typeof window !== 'undefined' &&
+    typeof document !== 'undefined'
+  );
+}
+
+/**
+ * Iterate over an Array or an Object invoking a function for each item.
+ *
+ * If `obj` is an Array callback will be called passing
+ * the value, index, and complete array for each item.
+ *
+ * If 'obj' is an Object callback will be called passing
+ * the value, key, and complete object for each property.
+ *
+ * @param {Object|Array} obj The object to iterate
+ * @param {Function} fn The callback to invoke for each item
+ */
+function forEach(obj, fn) {
+  // Don't bother if no value provided
+  if (obj === null || typeof obj === 'undefined') {
+    return;
+  }
+
+  // Force an array if not already something iterable
+  if (typeof obj !== 'object' && !isArray(obj)) {
+    /*eslint no-param-reassign:0*/
+    obj = [obj];
+  }
+
+  if (isArray(obj)) {
+    // Iterate over array values
+    for (var i = 0, l = obj.length; i < l; i++) {
+      fn.call(null, obj[i], i, obj);
+    }
+  } else {
+    // Iterate over object keys
+    for (var key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        fn.call(null, obj[key], key, obj);
+      }
+    }
+  }
+}
+
+/**
+ * Accepts varargs expecting each argument to be an object, then
+ * immutably merges the properties of each object and returns result.
+ *
+ * When multiple objects contain the same key the later object in
+ * the arguments list will take precedence.
+ *
+ * Example:
+ *
+ * ```js
+ * var result = merge({foo: 123}, {foo: 456});
+ * console.log(result.foo); // outputs 456
+ * ```
+ *
+ * @param {Object} obj1 Object to merge
+ * @returns {Object} Result of all merge properties
+ */
+function merge(/* obj1, obj2, obj3, ... */) {
+  var result = {};
+  function assignValue(val, key) {
+    if (typeof result[key] === 'object' && typeof val === 'object') {
+      result[key] = merge(result[key], val);
+    } else {
+      result[key] = val;
+    }
+  }
+
+  for (var i = 0, l = arguments.length; i < l; i++) {
+    forEach(arguments[i], assignValue);
+  }
+  return result;
+}
+
+/**
+ * Extends object a by mutably adding to it the properties of object b.
+ *
+ * @param {Object} a The object to be extended
+ * @param {Object} b The object to copy properties from
+ * @param {Object} thisArg The object to bind function to
+ * @return {Object} The resulting value of object a
+ */
+function extend(a, b, thisArg) {
+  forEach(b, function assignValue(val, key) {
+    if (thisArg && typeof val === 'function') {
+      a[key] = bind(val, thisArg);
+    } else {
+      a[key] = val;
+    }
+  });
+  return a;
+}
+
+module.exports = {
+  isArray: isArray,
+  isArrayBuffer: isArrayBuffer,
+  isBuffer: isBuffer,
+  isFormData: isFormData,
+  isArrayBufferView: isArrayBufferView,
+  isString: isString,
+  isNumber: isNumber,
+  isObject: isObject,
+  isUndefined: isUndefined,
+  isDate: isDate,
+  isFile: isFile,
+  isBlob: isBlob,
+  isFunction: isFunction,
+  isStream: isStream,
+  isURLSearchParams: isURLSearchParams,
+  isStandardBrowserEnv: isStandardBrowserEnv,
+  forEach: forEach,
+  merge: merge,
+  extend: extend,
+  trim: trim
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/_babel-loader@7.1.2@babel-loader/lib/index.js?{\"cacheDirectory\":true,\"presets\":[[\"env\",{\"modules\":false,\"targets\":{\"browsers\":[\"> 2%\"],\"uglify\":true}}]]}!./node_modules/_vue-loader@12.2.2@vue-loader/lib/selector.js?type=script&index=0!./resources/assets/js/components/Comment.vue":
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js__ = __webpack_require__("./node_modules/_toastr@2.1.2@toastr/build/toastr.min.js");
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__config_toastr__ = __webpack_require__("./resources/assets/js/config/toastr.js");
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_emojione__ = __webpack_require__("./node_modules/_emojione@3.1.2@emojione/lib/js/emojione.js");
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_emojione___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2_emojione__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3_fine_uploader_lib_traditional__ = __webpack_require__("./node_modules/_fine-uploader@5.15.0@fine-uploader/lib/traditional.js");
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3_fine_uploader_lib_traditional___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_3_fine_uploader_lib_traditional__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__config_helper__ = __webpack_require__("./resources/assets/js/config/helper.js");
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__VoteButton__ = __webpack_require__("./resources/assets/js/components/VoteButton.vue");
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__VoteButton___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_5__VoteButton__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6_v_textcomplete__ = __webpack_require__("./node_modules/_v-textcomplete@0.2.5@v-textcomplete/dist/v-textcomplete.js");
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6_v_textcomplete___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_6_v_textcomplete__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_7__vendor_github_emoji__ = __webpack_require__("./resources/assets/js/vendor/github_emoji.js");
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+
+
+
+
+
+
+
+
+
+/* harmony default export */ __webpack_exports__["default"] = ({
+    components: { VoteButton: __WEBPACK_IMPORTED_MODULE_5__VoteButton___default.a, TextComplete: __WEBPACK_IMPORTED_MODULE_6_v_textcomplete___default.a },
+    props: {
+        contentWrapperClass: {
+            type: String,
+            default: function _default() {
+                return 'col-md-8 col-md-offset-2';
+            }
+        },
+        title: {
+            type: String,
+            default: function _default() {
+                return '';
+            }
+        },
+        username: {
+            type: String,
+            default: function _default() {
+                return '';
+            }
+        },
+        userAvatar: {
+            type: String,
+            default: function _default() {
+                return '';
+            }
+        },
+        commentableType: {
+            type: String,
+            default: function _default() {
+                return 'articles';
+            }
+        },
+        commentableId: {
+            type: String,
+            default: function _default() {
+                return 0;
+            }
+        },
+        canComment: {
+            type: Boolean,
+            default: function _default() {
+                return false;
+            }
+        },
+        nullText: {
+            type: String,
+            default: function _default() {
+                return 'Nothing...';
+            }
+        },
+        nullClass: {
+            type: String,
+            default: function _default() {
+                return 'none';
+            }
+        }
+    },
+    data: function data() {
+        return {
+            comments: [],
+            content: '',
+            isSubmiting: false,
+            strategies: [{
+                match: /(^|\s):([a-z0-9+\-\_]*)$/,
+                search: function search(term, callback) {
+                    callback(Object.keys(__WEBPACK_IMPORTED_MODULE_7__vendor_github_emoji__["a" /* default */]).filter(function (name) {
+                        return name.startsWith(term);
+                    }).slice(0, 10));
+                },
+                template: function template(name) {
+                    return '<img width="17" src="' + __WEBPACK_IMPORTED_MODULE_7__vendor_github_emoji__["a" /* default */][name] + '"></img> ' + name;
+                },
+                replace: function replace(value) {
+                    return '$1:' + value + ': ';
+                }
+            }]
+        };
+    },
+    mounted: function mounted() {
+        var _this = this;
+
+        var url = 'commentable/' + this.commentableId + '/comment';
+        console.log(url);
+        this.$http.get(url, {
+            params: {
+                commentable_type: this.commentableType
+            }
+        }).then(function (response) {
+            response.data.data.forEach(function (data) {
+                data.content_html = _this.parse(data.content_raw);
+
+                return data;
+            });
+            _this.comments = response.data.data;
+        });
+
+        __WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js___default.a.options = __WEBPACK_IMPORTED_MODULE_1__config_toastr__["a" /* default */];
+
+        if (this.canComment) {
+            this.contentUploader();
+        }
+    },
+
+    methods: {
+        comment: function comment() {
+            var _this2 = this;
+
+            var data = {
+                content: this.content,
+                commentable_id: this.commentableId,
+                commentable_type: this.commentableType
+            };
+
+            this.isSubmiting = true;
+
+            this.$http.post('comments', data).then(function (response) {
+                var comment = null;
+
+                comment = response.data.data;
+                comment.content_html = _this2.parse(comment.content_raw);
+
+                _this2.comments.push(comment);
+                _this2.content = '';
+                _this2.isSubmiting = false;
+
+                __WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js___default.a.success('You publish the comment success!');
+            }).catch(function (_ref) {
+                var response = _ref.response;
+
+                _this2.isSubmiting = false;
+                Object(__WEBPACK_IMPORTED_MODULE_4__config_helper__["a" /* stack_error */])(response);
+            });
+        },
+        reply: function reply(name) {
+            $('#content').focus();
+            this.content = '@' + name + ' ';
+        },
+        commentDelete: function commentDelete(index, id) {
+            var _this3 = this;
+
+            this.$http.delete('comments/' + id).then(function (response) {
+                _this3.comments.splice(index, 1);
+                __WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js___default.a.success('You delete your comment success!');
+            });
+        },
+        parse: function parse(html) {
+            marked.setOptions({
+                highlight: function highlight(code) {
+                    return hljs.highlightAuto(code).value;
+                }
+            });
+
+            return __WEBPACK_IMPORTED_MODULE_2_emojione___default.a.toImage(marked(html));
+        },
+        contentUploader: function contentUploader() {
+            var vm = this;
+
+            document.getElementById("content").addEventListener('paste', function (e) {
+                if (event.clipboardData.types.indexOf("Files") >= 0) {
+                    event.preventDefault();
+                }
+            }, false);
+
+            var uploader = new __WEBPACK_IMPORTED_MODULE_3_fine_uploader_lib_traditional___default.a.FineUploaderBasic({
+                paste: {
+                    targetElement: document.querySelector('#content')
+                },
+                request: {
+                    endpoint: '/api/file/upload',
+                    inputName: 'image',
+                    customHeaders: {
+                        'X-CSRF-TOKEN': window.Laravel.csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    params: {
+                        strategy: 'comment'
+                    }
+                },
+                validation: {
+                    allowedExtensions: ['jpeg', 'jpg', 'gif', 'png']
+                },
+                callbacks: {
+                    onPasteReceived: function onPasteReceived(file) {
+
+                        console.log('success');
+                        var promise = new __WEBPACK_IMPORTED_MODULE_3_fine_uploader_lib_traditional___default.a.Promise();
+
+                        if (file == null || typeof file.type == 'undefined' || file.type.indexOf('image/')) {
+                            __WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js___default.a.error('Only can upload image!');
+                            return promise.failure('not a image.');
+                        }
+
+                        if (!/\/(?:jpeg|jpg|png|gif)/i.test(file.type)) {
+                            __WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js___default.a.error('Uploaded Failed! Image only supported jpeg, jpg, gif and png.');
+                            return promise.failure('not a image.');
+                        }
+
+                        return promise.then(function () {
+                            vm.createdImageUploading('image.png');
+                        }).success('image');
+                    },
+                    onComplete: function onComplete(id, name, responseJSON) {
+                        vm.replaceImageUploading(name, responseJSON.url);
+                    },
+                    onError: function onError() {
+                        __WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js___default.a.error('Uploaded Failed!');
+                        vm.replaceImageUploading(name, '');
+                    }
+                }
+            });
+
+            var dragAndDropModule = new __WEBPACK_IMPORTED_MODULE_3_fine_uploader_lib_traditional___default.a.DragAndDrop({
+                dropZoneElements: [document.querySelector('#content')],
+                callbacks: {
+                    processingDroppedFilesComplete: function processingDroppedFilesComplete(files, dropTarget) {
+                        files.forEach(function (file) {
+                            if (!/\/(?:jpeg|jpg|png|gif)/i.test(file.type)) {
+                                __WEBPACK_IMPORTED_MODULE_0_toastr_build_toastr_min_js___default.a.error('Uploaded Failed! Image only supported jpeg, jpg, gif and png.');
+                                return promise.failure('not a image.');
+                            }
+                            vm.createdImageUploading(file.name);
+                        });
+                        uploader.addFiles(files); //this submits the dropped files to Fine Uploader
+                    }
+                }
+            });
+        },
+        getImageUploading: function getImageUploading() {
+            return '\n![Uploading ...]()\n';
+        },
+        createdImageUploading: function createdImageUploading(name) {
+            this.content = this.content + this.getImageUploading();
+        },
+        replaceImageUploading: function replaceImageUploading(name, url) {
+            var result = '';
+
+            if (url) {
+                result = '\n![' + name + '](' + url + ')\n';
+            }
+
+            this.content = this.content.replace(this.getImageUploading(), result);
+        }
+    }
+});
+
+/***/ }),
 
 /***/ "./node_modules/_babel-loader@7.1.2@babel-loader/lib/index.js?{\"cacheDirectory\":true,\"presets\":[[\"env\",{\"modules\":false,\"targets\":{\"browsers\":[\"> 2%\"],\"uglify\":true}}]]}!./node_modules/_vue-loader@12.2.2@vue-loader/lib/selector.js?type=script&index=0!./resources/assets/js/components/Parse.vue":
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
@@ -96,6 +1975,86 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
     created: function created() {
         this.rawHtml = __WEBPACK_IMPORTED_MODULE_0_emojione___default.a.toImage(marked(this.content));
     }
+});
+
+/***/ }),
+
+/***/ "./node_modules/_babel-loader@7.1.2@babel-loader/lib/index.js?{\"cacheDirectory\":true,\"presets\":[[\"env\",{\"modules\":false,\"targets\":{\"browsers\":[\"> 2%\"],\"uglify\":true}}]]}!./node_modules/_vue-loader@12.2.2@vue-loader/lib/selector.js?type=script&index=0!./resources/assets/js/components/VoteButton.vue":
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+/* harmony default export */ __webpack_exports__["default"] = ({
+  props: {
+    item: {
+      type: Object,
+      default: function _default() {
+        return {};
+      }
+    },
+    api: {
+      type: String,
+      default: 'comments'
+    }
+  },
+  data: function data() {
+    return {
+      isLike: false
+    };
+  },
+
+  methods: {
+    toggleStatus: function toggleStatus() {
+      var count = this.item.vote_count;
+
+      this.item.is_voting = !this.item.is_voting;
+
+      this.item.vote_count = this.item.is_voting ? count + 1 : count - 1;
+    },
+    upVote: function upVote(id) {
+      this.toggleVote(id, 'up');
+    },
+    downVote: function downVote(id) {
+      this.toggleVote(id, 'down');
+    },
+    toggleVote: function toggleVote(id, type) {
+      var _this = this;
+
+      var url = this.api + '/vote/' + type;
+      var upType = 'is_up_voted';
+      var downType = 'is_down_voted';
+      var checkType = type == 'up' ? downType : upType;
+      var votingType = type == 'up' ? upType : downType;
+
+      this.$http.post(url, { id: id }).then(function () {
+        if (_this.item[checkType]) {
+          _this.item[upType] = !_this.item[upType];
+          _this.item[downType] = !_this.item[downType];
+          type == 'up' ? _this.item.vote_count++ : _this.item.vote_count--;
+        } else {
+          _this.item[votingType] = !_this.item[votingType];
+          if (type == 'up') _this.item[upType] ? _this.item.vote_count++ : _this.item.vote_count--;
+        }
+      }).catch(function (response) {
+        if (response.status == 401) {
+          window.location = '/login';
+        }
+      });
+    }
+  }
 });
 
 /***/ }),
@@ -3048,6 +5007,7506 @@ if (typeof jQuery === 'undefined') {
 
 }(this.emojione = this.emojione || {}));
 if(true) module.exports = this.emojione;
+
+/***/ }),
+
+/***/ "./node_modules/_fine-uploader@5.15.0@fine-uploader/fine-uploader/fine-uploader.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+var __WEBPACK_AMD_DEFINE_RESULT__;// Fine Uploader 5.15.0 - (c) 2013-present Widen Enterprises, Inc. MIT licensed. http://fineuploader.com
+(function(global) {
+    var qq = function(element) {
+        "use strict";
+        return {
+            hide: function() {
+                element.style.display = "none";
+                return this;
+            },
+            attach: function(type, fn) {
+                if (element.addEventListener) {
+                    element.addEventListener(type, fn, false);
+                } else if (element.attachEvent) {
+                    element.attachEvent("on" + type, fn);
+                }
+                return function() {
+                    qq(element).detach(type, fn);
+                };
+            },
+            detach: function(type, fn) {
+                if (element.removeEventListener) {
+                    element.removeEventListener(type, fn, false);
+                } else if (element.attachEvent) {
+                    element.detachEvent("on" + type, fn);
+                }
+                return this;
+            },
+            contains: function(descendant) {
+                if (!descendant) {
+                    return false;
+                }
+                if (element === descendant) {
+                    return true;
+                }
+                if (element.contains) {
+                    return element.contains(descendant);
+                } else {
+                    return !!(descendant.compareDocumentPosition(element) & 8);
+                }
+            },
+            insertBefore: function(elementB) {
+                elementB.parentNode.insertBefore(element, elementB);
+                return this;
+            },
+            remove: function() {
+                element.parentNode.removeChild(element);
+                return this;
+            },
+            css: function(styles) {
+                if (element.style == null) {
+                    throw new qq.Error("Can't apply style to node as it is not on the HTMLElement prototype chain!");
+                }
+                if (styles.opacity != null) {
+                    if (typeof element.style.opacity !== "string" && typeof element.filters !== "undefined") {
+                        styles.filter = "alpha(opacity=" + Math.round(100 * styles.opacity) + ")";
+                    }
+                }
+                qq.extend(element.style, styles);
+                return this;
+            },
+            hasClass: function(name, considerParent) {
+                var re = new RegExp("(^| )" + name + "( |$)");
+                return re.test(element.className) || !!(considerParent && re.test(element.parentNode.className));
+            },
+            addClass: function(name) {
+                if (!qq(element).hasClass(name)) {
+                    element.className += " " + name;
+                }
+                return this;
+            },
+            removeClass: function(name) {
+                var re = new RegExp("(^| )" + name + "( |$)");
+                element.className = element.className.replace(re, " ").replace(/^\s+|\s+$/g, "");
+                return this;
+            },
+            getByClass: function(className, first) {
+                var candidates, result = [];
+                if (first && element.querySelector) {
+                    return element.querySelector("." + className);
+                } else if (element.querySelectorAll) {
+                    return element.querySelectorAll("." + className);
+                }
+                candidates = element.getElementsByTagName("*");
+                qq.each(candidates, function(idx, val) {
+                    if (qq(val).hasClass(className)) {
+                        result.push(val);
+                    }
+                });
+                return first ? result[0] : result;
+            },
+            getFirstByClass: function(className) {
+                return qq(element).getByClass(className, true);
+            },
+            children: function() {
+                var children = [], child = element.firstChild;
+                while (child) {
+                    if (child.nodeType === 1) {
+                        children.push(child);
+                    }
+                    child = child.nextSibling;
+                }
+                return children;
+            },
+            setText: function(text) {
+                element.innerText = text;
+                element.textContent = text;
+                return this;
+            },
+            clearText: function() {
+                return qq(element).setText("");
+            },
+            hasAttribute: function(attrName) {
+                var attrVal;
+                if (element.hasAttribute) {
+                    if (!element.hasAttribute(attrName)) {
+                        return false;
+                    }
+                    return /^false$/i.exec(element.getAttribute(attrName)) == null;
+                } else {
+                    attrVal = element[attrName];
+                    if (attrVal === undefined) {
+                        return false;
+                    }
+                    return /^false$/i.exec(attrVal) == null;
+                }
+            }
+        };
+    };
+    (function() {
+        "use strict";
+        qq.canvasToBlob = function(canvas, mime, quality) {
+            return qq.dataUriToBlob(canvas.toDataURL(mime, quality));
+        };
+        qq.dataUriToBlob = function(dataUri) {
+            var arrayBuffer, byteString, createBlob = function(data, mime) {
+                var BlobBuilder = window.BlobBuilder || window.WebKitBlobBuilder || window.MozBlobBuilder || window.MSBlobBuilder, blobBuilder = BlobBuilder && new BlobBuilder();
+                if (blobBuilder) {
+                    blobBuilder.append(data);
+                    return blobBuilder.getBlob(mime);
+                } else {
+                    return new Blob([ data ], {
+                        type: mime
+                    });
+                }
+            }, intArray, mimeString;
+            if (dataUri.split(",")[0].indexOf("base64") >= 0) {
+                byteString = atob(dataUri.split(",")[1]);
+            } else {
+                byteString = decodeURI(dataUri.split(",")[1]);
+            }
+            mimeString = dataUri.split(",")[0].split(":")[1].split(";")[0];
+            arrayBuffer = new ArrayBuffer(byteString.length);
+            intArray = new Uint8Array(arrayBuffer);
+            qq.each(byteString, function(idx, character) {
+                intArray[idx] = character.charCodeAt(0);
+            });
+            return createBlob(arrayBuffer, mimeString);
+        };
+        qq.log = function(message, level) {
+            if (window.console) {
+                if (!level || level === "info") {
+                    window.console.log(message);
+                } else {
+                    if (window.console[level]) {
+                        window.console[level](message);
+                    } else {
+                        window.console.log("<" + level + "> " + message);
+                    }
+                }
+            }
+        };
+        qq.isObject = function(variable) {
+            return variable && !variable.nodeType && Object.prototype.toString.call(variable) === "[object Object]";
+        };
+        qq.isFunction = function(variable) {
+            return typeof variable === "function";
+        };
+        qq.isArray = function(value) {
+            return Object.prototype.toString.call(value) === "[object Array]" || value && window.ArrayBuffer && value.buffer && value.buffer.constructor === ArrayBuffer;
+        };
+        qq.isItemList = function(maybeItemList) {
+            return Object.prototype.toString.call(maybeItemList) === "[object DataTransferItemList]";
+        };
+        qq.isNodeList = function(maybeNodeList) {
+            return Object.prototype.toString.call(maybeNodeList) === "[object NodeList]" || maybeNodeList.item && maybeNodeList.namedItem;
+        };
+        qq.isString = function(maybeString) {
+            return Object.prototype.toString.call(maybeString) === "[object String]";
+        };
+        qq.trimStr = function(string) {
+            if (String.prototype.trim) {
+                return string.trim();
+            }
+            return string.replace(/^\s+|\s+$/g, "");
+        };
+        qq.format = function(str) {
+            var args = Array.prototype.slice.call(arguments, 1), newStr = str, nextIdxToReplace = newStr.indexOf("{}");
+            qq.each(args, function(idx, val) {
+                var strBefore = newStr.substring(0, nextIdxToReplace), strAfter = newStr.substring(nextIdxToReplace + 2);
+                newStr = strBefore + val + strAfter;
+                nextIdxToReplace = newStr.indexOf("{}", nextIdxToReplace + val.length);
+                if (nextIdxToReplace < 0) {
+                    return false;
+                }
+            });
+            return newStr;
+        };
+        qq.isFile = function(maybeFile) {
+            return window.File && Object.prototype.toString.call(maybeFile) === "[object File]";
+        };
+        qq.isFileList = function(maybeFileList) {
+            return window.FileList && Object.prototype.toString.call(maybeFileList) === "[object FileList]";
+        };
+        qq.isFileOrInput = function(maybeFileOrInput) {
+            return qq.isFile(maybeFileOrInput) || qq.isInput(maybeFileOrInput);
+        };
+        qq.isInput = function(maybeInput, notFile) {
+            var evaluateType = function(type) {
+                var normalizedType = type.toLowerCase();
+                if (notFile) {
+                    return normalizedType !== "file";
+                }
+                return normalizedType === "file";
+            };
+            if (window.HTMLInputElement) {
+                if (Object.prototype.toString.call(maybeInput) === "[object HTMLInputElement]") {
+                    if (maybeInput.type && evaluateType(maybeInput.type)) {
+                        return true;
+                    }
+                }
+            }
+            if (maybeInput.tagName) {
+                if (maybeInput.tagName.toLowerCase() === "input") {
+                    if (maybeInput.type && evaluateType(maybeInput.type)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+        qq.isBlob = function(maybeBlob) {
+            if (window.Blob && Object.prototype.toString.call(maybeBlob) === "[object Blob]") {
+                return true;
+            }
+        };
+        qq.isXhrUploadSupported = function() {
+            var input = document.createElement("input");
+            input.type = "file";
+            return input.multiple !== undefined && typeof File !== "undefined" && typeof FormData !== "undefined" && typeof qq.createXhrInstance().upload !== "undefined";
+        };
+        qq.createXhrInstance = function() {
+            if (window.XMLHttpRequest) {
+                return new XMLHttpRequest();
+            }
+            try {
+                return new ActiveXObject("MSXML2.XMLHTTP.3.0");
+            } catch (error) {
+                qq.log("Neither XHR or ActiveX are supported!", "error");
+                return null;
+            }
+        };
+        qq.isFolderDropSupported = function(dataTransfer) {
+            return dataTransfer.items && dataTransfer.items.length > 0 && dataTransfer.items[0].webkitGetAsEntry;
+        };
+        qq.isFileChunkingSupported = function() {
+            return !qq.androidStock() && qq.isXhrUploadSupported() && (File.prototype.slice !== undefined || File.prototype.webkitSlice !== undefined || File.prototype.mozSlice !== undefined);
+        };
+        qq.sliceBlob = function(fileOrBlob, start, end) {
+            var slicer = fileOrBlob.slice || fileOrBlob.mozSlice || fileOrBlob.webkitSlice;
+            return slicer.call(fileOrBlob, start, end);
+        };
+        qq.arrayBufferToHex = function(buffer) {
+            var bytesAsHex = "", bytes = new Uint8Array(buffer);
+            qq.each(bytes, function(idx, byt) {
+                var byteAsHexStr = byt.toString(16);
+                if (byteAsHexStr.length < 2) {
+                    byteAsHexStr = "0" + byteAsHexStr;
+                }
+                bytesAsHex += byteAsHexStr;
+            });
+            return bytesAsHex;
+        };
+        qq.readBlobToHex = function(blob, startOffset, length) {
+            var initialBlob = qq.sliceBlob(blob, startOffset, startOffset + length), fileReader = new FileReader(), promise = new qq.Promise();
+            fileReader.onload = function() {
+                promise.success(qq.arrayBufferToHex(fileReader.result));
+            };
+            fileReader.onerror = promise.failure;
+            fileReader.readAsArrayBuffer(initialBlob);
+            return promise;
+        };
+        qq.extend = function(first, second, extendNested) {
+            qq.each(second, function(prop, val) {
+                if (extendNested && qq.isObject(val)) {
+                    if (first[prop] === undefined) {
+                        first[prop] = {};
+                    }
+                    qq.extend(first[prop], val, true);
+                } else {
+                    first[prop] = val;
+                }
+            });
+            return first;
+        };
+        qq.override = function(target, sourceFn) {
+            var super_ = {}, source = sourceFn(super_);
+            qq.each(source, function(srcPropName, srcPropVal) {
+                if (target[srcPropName] !== undefined) {
+                    super_[srcPropName] = target[srcPropName];
+                }
+                target[srcPropName] = srcPropVal;
+            });
+            return target;
+        };
+        qq.indexOf = function(arr, elt, from) {
+            if (arr.indexOf) {
+                return arr.indexOf(elt, from);
+            }
+            from = from || 0;
+            var len = arr.length;
+            if (from < 0) {
+                from += len;
+            }
+            for (;from < len; from += 1) {
+                if (arr.hasOwnProperty(from) && arr[from] === elt) {
+                    return from;
+                }
+            }
+            return -1;
+        };
+        qq.getUniqueId = function() {
+            return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == "x" ? r : r & 3 | 8;
+                return v.toString(16);
+            });
+        };
+        qq.ie = function() {
+            return navigator.userAgent.indexOf("MSIE") !== -1 || navigator.userAgent.indexOf("Trident") !== -1;
+        };
+        qq.ie7 = function() {
+            return navigator.userAgent.indexOf("MSIE 7") !== -1;
+        };
+        qq.ie8 = function() {
+            return navigator.userAgent.indexOf("MSIE 8") !== -1;
+        };
+        qq.ie10 = function() {
+            return navigator.userAgent.indexOf("MSIE 10") !== -1;
+        };
+        qq.ie11 = function() {
+            return qq.ie() && navigator.userAgent.indexOf("rv:11") !== -1;
+        };
+        qq.edge = function() {
+            return navigator.userAgent.indexOf("Edge") >= 0;
+        };
+        qq.safari = function() {
+            return navigator.vendor !== undefined && navigator.vendor.indexOf("Apple") !== -1;
+        };
+        qq.chrome = function() {
+            return navigator.vendor !== undefined && navigator.vendor.indexOf("Google") !== -1;
+        };
+        qq.opera = function() {
+            return navigator.vendor !== undefined && navigator.vendor.indexOf("Opera") !== -1;
+        };
+        qq.firefox = function() {
+            return !qq.edge() && !qq.ie11() && navigator.userAgent.indexOf("Mozilla") !== -1 && navigator.vendor !== undefined && navigator.vendor === "";
+        };
+        qq.windows = function() {
+            return navigator.platform === "Win32";
+        };
+        qq.android = function() {
+            return navigator.userAgent.toLowerCase().indexOf("android") !== -1;
+        };
+        qq.androidStock = function() {
+            return qq.android() && navigator.userAgent.toLowerCase().indexOf("chrome") < 0;
+        };
+        qq.ios6 = function() {
+            return qq.ios() && navigator.userAgent.indexOf(" OS 6_") !== -1;
+        };
+        qq.ios7 = function() {
+            return qq.ios() && navigator.userAgent.indexOf(" OS 7_") !== -1;
+        };
+        qq.ios8 = function() {
+            return qq.ios() && navigator.userAgent.indexOf(" OS 8_") !== -1;
+        };
+        qq.ios800 = function() {
+            return qq.ios() && navigator.userAgent.indexOf(" OS 8_0 ") !== -1;
+        };
+        qq.ios = function() {
+            return navigator.userAgent.indexOf("iPad") !== -1 || navigator.userAgent.indexOf("iPod") !== -1 || navigator.userAgent.indexOf("iPhone") !== -1;
+        };
+        qq.iosChrome = function() {
+            return qq.ios() && navigator.userAgent.indexOf("CriOS") !== -1;
+        };
+        qq.iosSafari = function() {
+            return qq.ios() && !qq.iosChrome() && navigator.userAgent.indexOf("Safari") !== -1;
+        };
+        qq.iosSafariWebView = function() {
+            return qq.ios() && !qq.iosChrome() && !qq.iosSafari();
+        };
+        qq.preventDefault = function(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            } else {
+                e.returnValue = false;
+            }
+        };
+        qq.toElement = function() {
+            var div = document.createElement("div");
+            return function(html) {
+                div.innerHTML = html;
+                var element = div.firstChild;
+                div.removeChild(element);
+                return element;
+            };
+        }();
+        qq.each = function(iterableItem, callback) {
+            var keyOrIndex, retVal;
+            if (iterableItem) {
+                if (window.Storage && iterableItem.constructor === window.Storage) {
+                    for (keyOrIndex = 0; keyOrIndex < iterableItem.length; keyOrIndex++) {
+                        retVal = callback(iterableItem.key(keyOrIndex), iterableItem.getItem(iterableItem.key(keyOrIndex)));
+                        if (retVal === false) {
+                            break;
+                        }
+                    }
+                } else if (qq.isArray(iterableItem) || qq.isItemList(iterableItem) || qq.isNodeList(iterableItem)) {
+                    for (keyOrIndex = 0; keyOrIndex < iterableItem.length; keyOrIndex++) {
+                        retVal = callback(keyOrIndex, iterableItem[keyOrIndex]);
+                        if (retVal === false) {
+                            break;
+                        }
+                    }
+                } else if (qq.isString(iterableItem)) {
+                    for (keyOrIndex = 0; keyOrIndex < iterableItem.length; keyOrIndex++) {
+                        retVal = callback(keyOrIndex, iterableItem.charAt(keyOrIndex));
+                        if (retVal === false) {
+                            break;
+                        }
+                    }
+                } else {
+                    for (keyOrIndex in iterableItem) {
+                        if (Object.prototype.hasOwnProperty.call(iterableItem, keyOrIndex)) {
+                            retVal = callback(keyOrIndex, iterableItem[keyOrIndex]);
+                            if (retVal === false) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        qq.bind = function(oldFunc, context) {
+            if (qq.isFunction(oldFunc)) {
+                var args = Array.prototype.slice.call(arguments, 2);
+                return function() {
+                    var newArgs = qq.extend([], args);
+                    if (arguments.length) {
+                        newArgs = newArgs.concat(Array.prototype.slice.call(arguments));
+                    }
+                    return oldFunc.apply(context, newArgs);
+                };
+            }
+            throw new Error("first parameter must be a function!");
+        };
+        qq.obj2url = function(obj, temp, prefixDone) {
+            var uristrings = [], prefix = "&", add = function(nextObj, i) {
+                var nextTemp = temp ? /\[\]$/.test(temp) ? temp : temp + "[" + i + "]" : i;
+                if (nextTemp !== "undefined" && i !== "undefined") {
+                    uristrings.push(typeof nextObj === "object" ? qq.obj2url(nextObj, nextTemp, true) : Object.prototype.toString.call(nextObj) === "[object Function]" ? encodeURIComponent(nextTemp) + "=" + encodeURIComponent(nextObj()) : encodeURIComponent(nextTemp) + "=" + encodeURIComponent(nextObj));
+                }
+            };
+            if (!prefixDone && temp) {
+                prefix = /\?/.test(temp) ? /\?$/.test(temp) ? "" : "&" : "?";
+                uristrings.push(temp);
+                uristrings.push(qq.obj2url(obj));
+            } else if (Object.prototype.toString.call(obj) === "[object Array]" && typeof obj !== "undefined") {
+                qq.each(obj, function(idx, val) {
+                    add(val, idx);
+                });
+            } else if (typeof obj !== "undefined" && obj !== null && typeof obj === "object") {
+                qq.each(obj, function(prop, val) {
+                    add(val, prop);
+                });
+            } else {
+                uristrings.push(encodeURIComponent(temp) + "=" + encodeURIComponent(obj));
+            }
+            if (temp) {
+                return uristrings.join(prefix);
+            } else {
+                return uristrings.join(prefix).replace(/^&/, "").replace(/%20/g, "+");
+            }
+        };
+        qq.obj2FormData = function(obj, formData, arrayKeyName) {
+            if (!formData) {
+                formData = new FormData();
+            }
+            qq.each(obj, function(key, val) {
+                key = arrayKeyName ? arrayKeyName + "[" + key + "]" : key;
+                if (qq.isObject(val)) {
+                    qq.obj2FormData(val, formData, key);
+                } else if (qq.isFunction(val)) {
+                    formData.append(key, val());
+                } else {
+                    formData.append(key, val);
+                }
+            });
+            return formData;
+        };
+        qq.obj2Inputs = function(obj, form) {
+            var input;
+            if (!form) {
+                form = document.createElement("form");
+            }
+            qq.obj2FormData(obj, {
+                append: function(key, val) {
+                    input = document.createElement("input");
+                    input.setAttribute("name", key);
+                    input.setAttribute("value", val);
+                    form.appendChild(input);
+                }
+            });
+            return form;
+        };
+        qq.parseJson = function(json) {
+            if (window.JSON && qq.isFunction(JSON.parse)) {
+                return JSON.parse(json);
+            } else {
+                return eval("(" + json + ")");
+            }
+        };
+        qq.getExtension = function(filename) {
+            var extIdx = filename.lastIndexOf(".") + 1;
+            if (extIdx > 0) {
+                return filename.substr(extIdx, filename.length - extIdx);
+            }
+        };
+        qq.getFilename = function(blobOrFileInput) {
+            if (qq.isInput(blobOrFileInput)) {
+                return blobOrFileInput.value.replace(/.*(\/|\\)/, "");
+            } else if (qq.isFile(blobOrFileInput)) {
+                if (blobOrFileInput.fileName !== null && blobOrFileInput.fileName !== undefined) {
+                    return blobOrFileInput.fileName;
+                }
+            }
+            return blobOrFileInput.name;
+        };
+        qq.DisposeSupport = function() {
+            var disposers = [];
+            return {
+                dispose: function() {
+                    var disposer;
+                    do {
+                        disposer = disposers.shift();
+                        if (disposer) {
+                            disposer();
+                        }
+                    } while (disposer);
+                },
+                attach: function() {
+                    var args = arguments;
+                    this.addDisposer(qq(args[0]).attach.apply(this, Array.prototype.slice.call(arguments, 1)));
+                },
+                addDisposer: function(disposeFunction) {
+                    disposers.push(disposeFunction);
+                }
+            };
+        };
+    })();
+    (function() {
+        "use strict";
+        if (true) {
+            !(__WEBPACK_AMD_DEFINE_RESULT__ = function() {
+                return qq;
+            }.call(exports, __webpack_require__, exports, module),
+				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+        } else if (typeof module !== "undefined" && module.exports) {
+            module.exports = qq;
+        } else {
+            global.qq = qq;
+        }
+    })();
+    (function() {
+        "use strict";
+        qq.Error = function(message) {
+            this.message = "[Fine Uploader " + qq.version + "] " + message;
+        };
+        qq.Error.prototype = new Error();
+    })();
+    qq.version = "5.15.0";
+    qq.supportedFeatures = function() {
+        "use strict";
+        var supportsUploading, supportsUploadingBlobs, supportsFileDrop, supportsAjaxFileUploading, supportsFolderDrop, supportsChunking, supportsResume, supportsUploadViaPaste, supportsUploadCors, supportsDeleteFileXdr, supportsDeleteFileCorsXhr, supportsDeleteFileCors, supportsFolderSelection, supportsImagePreviews, supportsUploadProgress;
+        function testSupportsFileInputElement() {
+            var supported = true, tempInput;
+            try {
+                tempInput = document.createElement("input");
+                tempInput.type = "file";
+                qq(tempInput).hide();
+                if (tempInput.disabled) {
+                    supported = false;
+                }
+            } catch (ex) {
+                supported = false;
+            }
+            return supported;
+        }
+        function isChrome21OrHigher() {
+            return (qq.chrome() || qq.opera()) && navigator.userAgent.match(/Chrome\/[2][1-9]|Chrome\/[3-9][0-9]/) !== undefined;
+        }
+        function isChrome14OrHigher() {
+            return (qq.chrome() || qq.opera()) && navigator.userAgent.match(/Chrome\/[1][4-9]|Chrome\/[2-9][0-9]/) !== undefined;
+        }
+        function isCrossOriginXhrSupported() {
+            if (window.XMLHttpRequest) {
+                var xhr = qq.createXhrInstance();
+                return xhr.withCredentials !== undefined;
+            }
+            return false;
+        }
+        function isXdrSupported() {
+            return window.XDomainRequest !== undefined;
+        }
+        function isCrossOriginAjaxSupported() {
+            if (isCrossOriginXhrSupported()) {
+                return true;
+            }
+            return isXdrSupported();
+        }
+        function isFolderSelectionSupported() {
+            return document.createElement("input").webkitdirectory !== undefined;
+        }
+        function isLocalStorageSupported() {
+            try {
+                return !!window.localStorage && qq.isFunction(window.localStorage.setItem);
+            } catch (error) {
+                return false;
+            }
+        }
+        function isDragAndDropSupported() {
+            var span = document.createElement("span");
+            return ("draggable" in span || "ondragstart" in span && "ondrop" in span) && !qq.android() && !qq.ios();
+        }
+        supportsUploading = testSupportsFileInputElement();
+        supportsAjaxFileUploading = supportsUploading && qq.isXhrUploadSupported();
+        supportsUploadingBlobs = supportsAjaxFileUploading && !qq.androidStock();
+        supportsFileDrop = supportsAjaxFileUploading && isDragAndDropSupported();
+        supportsFolderDrop = supportsFileDrop && isChrome21OrHigher();
+        supportsChunking = supportsAjaxFileUploading && qq.isFileChunkingSupported();
+        supportsResume = supportsAjaxFileUploading && supportsChunking && isLocalStorageSupported();
+        supportsUploadViaPaste = supportsAjaxFileUploading && isChrome14OrHigher();
+        supportsUploadCors = supportsUploading && (window.postMessage !== undefined || supportsAjaxFileUploading);
+        supportsDeleteFileCorsXhr = isCrossOriginXhrSupported();
+        supportsDeleteFileXdr = isXdrSupported();
+        supportsDeleteFileCors = isCrossOriginAjaxSupported();
+        supportsFolderSelection = isFolderSelectionSupported();
+        supportsImagePreviews = supportsAjaxFileUploading && window.FileReader !== undefined;
+        supportsUploadProgress = function() {
+            if (supportsAjaxFileUploading) {
+                return !qq.androidStock() && !qq.iosChrome();
+            }
+            return false;
+        }();
+        return {
+            ajaxUploading: supportsAjaxFileUploading,
+            blobUploading: supportsUploadingBlobs,
+            canDetermineSize: supportsAjaxFileUploading,
+            chunking: supportsChunking,
+            deleteFileCors: supportsDeleteFileCors,
+            deleteFileCorsXdr: supportsDeleteFileXdr,
+            deleteFileCorsXhr: supportsDeleteFileCorsXhr,
+            dialogElement: !!window.HTMLDialogElement,
+            fileDrop: supportsFileDrop,
+            folderDrop: supportsFolderDrop,
+            folderSelection: supportsFolderSelection,
+            imagePreviews: supportsImagePreviews,
+            imageValidation: supportsImagePreviews,
+            itemSizeValidation: supportsAjaxFileUploading,
+            pause: supportsChunking,
+            progressBar: supportsUploadProgress,
+            resume: supportsResume,
+            scaling: supportsImagePreviews && supportsUploadingBlobs,
+            tiffPreviews: qq.safari(),
+            unlimitedScaledImageSize: !qq.ios(),
+            uploading: supportsUploading,
+            uploadCors: supportsUploadCors,
+            uploadCustomHeaders: supportsAjaxFileUploading,
+            uploadNonMultipart: supportsAjaxFileUploading,
+            uploadViaPaste: supportsUploadViaPaste
+        };
+    }();
+    qq.isGenericPromise = function(maybePromise) {
+        "use strict";
+        return !!(maybePromise && maybePromise.then && qq.isFunction(maybePromise.then));
+    };
+    qq.Promise = function() {
+        "use strict";
+        var successArgs, failureArgs, successCallbacks = [], failureCallbacks = [], doneCallbacks = [], state = 0;
+        qq.extend(this, {
+            then: function(onSuccess, onFailure) {
+                if (state === 0) {
+                    if (onSuccess) {
+                        successCallbacks.push(onSuccess);
+                    }
+                    if (onFailure) {
+                        failureCallbacks.push(onFailure);
+                    }
+                } else if (state === -1) {
+                    onFailure && onFailure.apply(null, failureArgs);
+                } else if (onSuccess) {
+                    onSuccess.apply(null, successArgs);
+                }
+                return this;
+            },
+            done: function(callback) {
+                if (state === 0) {
+                    doneCallbacks.push(callback);
+                } else {
+                    callback.apply(null, failureArgs === undefined ? successArgs : failureArgs);
+                }
+                return this;
+            },
+            success: function() {
+                state = 1;
+                successArgs = arguments;
+                if (successCallbacks.length) {
+                    qq.each(successCallbacks, function(idx, callback) {
+                        callback.apply(null, successArgs);
+                    });
+                }
+                if (doneCallbacks.length) {
+                    qq.each(doneCallbacks, function(idx, callback) {
+                        callback.apply(null, successArgs);
+                    });
+                }
+                return this;
+            },
+            failure: function() {
+                state = -1;
+                failureArgs = arguments;
+                if (failureCallbacks.length) {
+                    qq.each(failureCallbacks, function(idx, callback) {
+                        callback.apply(null, failureArgs);
+                    });
+                }
+                if (doneCallbacks.length) {
+                    qq.each(doneCallbacks, function(idx, callback) {
+                        callback.apply(null, failureArgs);
+                    });
+                }
+                return this;
+            }
+        });
+    };
+    qq.BlobProxy = function(referenceBlob, onCreate) {
+        "use strict";
+        qq.extend(this, {
+            referenceBlob: referenceBlob,
+            create: function() {
+                return onCreate(referenceBlob);
+            }
+        });
+    };
+    qq.UploadButton = function(o) {
+        "use strict";
+        var self = this, disposeSupport = new qq.DisposeSupport(), options = {
+            acceptFiles: null,
+            element: null,
+            focusClass: "qq-upload-button-focus",
+            folders: false,
+            hoverClass: "qq-upload-button-hover",
+            ios8BrowserCrashWorkaround: false,
+            multiple: false,
+            name: "qqfile",
+            onChange: function(input) {},
+            title: null
+        }, input, buttonId;
+        qq.extend(options, o);
+        buttonId = qq.getUniqueId();
+        function createInput() {
+            var input = document.createElement("input");
+            input.setAttribute(qq.UploadButton.BUTTON_ID_ATTR_NAME, buttonId);
+            input.setAttribute("title", options.title);
+            self.setMultiple(options.multiple, input);
+            if (options.folders && qq.supportedFeatures.folderSelection) {
+                input.setAttribute("webkitdirectory", "");
+            }
+            if (options.acceptFiles) {
+                input.setAttribute("accept", options.acceptFiles);
+            }
+            input.setAttribute("type", "file");
+            input.setAttribute("name", options.name);
+            qq(input).css({
+                position: "absolute",
+                right: 0,
+                top: 0,
+                fontFamily: "Arial",
+                fontSize: qq.ie() && !qq.ie8() ? "3500px" : "118px",
+                margin: 0,
+                padding: 0,
+                cursor: "pointer",
+                opacity: 0
+            });
+            !qq.ie7() && qq(input).css({
+                height: "100%"
+            });
+            options.element.appendChild(input);
+            disposeSupport.attach(input, "change", function() {
+                options.onChange(input);
+            });
+            disposeSupport.attach(input, "mouseover", function() {
+                qq(options.element).addClass(options.hoverClass);
+            });
+            disposeSupport.attach(input, "mouseout", function() {
+                qq(options.element).removeClass(options.hoverClass);
+            });
+            disposeSupport.attach(input, "focus", function() {
+                qq(options.element).addClass(options.focusClass);
+            });
+            disposeSupport.attach(input, "blur", function() {
+                qq(options.element).removeClass(options.focusClass);
+            });
+            return input;
+        }
+        qq(options.element).css({
+            position: "relative",
+            overflow: "hidden",
+            direction: "ltr"
+        });
+        qq.extend(this, {
+            getInput: function() {
+                return input;
+            },
+            getButtonId: function() {
+                return buttonId;
+            },
+            setMultiple: function(isMultiple, optInput) {
+                var input = optInput || this.getInput();
+                if (options.ios8BrowserCrashWorkaround && qq.ios8() && (qq.iosChrome() || qq.iosSafariWebView())) {
+                    input.setAttribute("multiple", "");
+                } else {
+                    if (isMultiple) {
+                        input.setAttribute("multiple", "");
+                    } else {
+                        input.removeAttribute("multiple");
+                    }
+                }
+            },
+            setAcceptFiles: function(acceptFiles) {
+                if (acceptFiles !== options.acceptFiles) {
+                    input.setAttribute("accept", acceptFiles);
+                }
+            },
+            reset: function() {
+                if (input.parentNode) {
+                    qq(input).remove();
+                }
+                qq(options.element).removeClass(options.focusClass);
+                input = null;
+                input = createInput();
+            }
+        });
+        input = createInput();
+    };
+    qq.UploadButton.BUTTON_ID_ATTR_NAME = "qq-button-id";
+    qq.UploadData = function(uploaderProxy) {
+        "use strict";
+        var data = [], byUuid = {}, byStatus = {}, byProxyGroupId = {}, byBatchId = {};
+        function getDataByIds(idOrIds) {
+            if (qq.isArray(idOrIds)) {
+                var entries = [];
+                qq.each(idOrIds, function(idx, id) {
+                    entries.push(data[id]);
+                });
+                return entries;
+            }
+            return data[idOrIds];
+        }
+        function getDataByUuids(uuids) {
+            if (qq.isArray(uuids)) {
+                var entries = [];
+                qq.each(uuids, function(idx, uuid) {
+                    entries.push(data[byUuid[uuid]]);
+                });
+                return entries;
+            }
+            return data[byUuid[uuids]];
+        }
+        function getDataByStatus(status) {
+            var statusResults = [], statuses = [].concat(status);
+            qq.each(statuses, function(index, statusEnum) {
+                var statusResultIndexes = byStatus[statusEnum];
+                if (statusResultIndexes !== undefined) {
+                    qq.each(statusResultIndexes, function(i, dataIndex) {
+                        statusResults.push(data[dataIndex]);
+                    });
+                }
+            });
+            return statusResults;
+        }
+        qq.extend(this, {
+            addFile: function(spec) {
+                var status = spec.status || qq.status.SUBMITTING, id = data.push({
+                    name: spec.name,
+                    originalName: spec.name,
+                    uuid: spec.uuid,
+                    size: spec.size == null ? -1 : spec.size,
+                    status: status
+                }) - 1;
+                if (spec.batchId) {
+                    data[id].batchId = spec.batchId;
+                    if (byBatchId[spec.batchId] === undefined) {
+                        byBatchId[spec.batchId] = [];
+                    }
+                    byBatchId[spec.batchId].push(id);
+                }
+                if (spec.proxyGroupId) {
+                    data[id].proxyGroupId = spec.proxyGroupId;
+                    if (byProxyGroupId[spec.proxyGroupId] === undefined) {
+                        byProxyGroupId[spec.proxyGroupId] = [];
+                    }
+                    byProxyGroupId[spec.proxyGroupId].push(id);
+                }
+                data[id].id = id;
+                byUuid[spec.uuid] = id;
+                if (byStatus[status] === undefined) {
+                    byStatus[status] = [];
+                }
+                byStatus[status].push(id);
+                spec.onBeforeStatusChange && spec.onBeforeStatusChange(id);
+                uploaderProxy.onStatusChange(id, null, status);
+                return id;
+            },
+            retrieve: function(optionalFilter) {
+                if (qq.isObject(optionalFilter) && data.length) {
+                    if (optionalFilter.id !== undefined) {
+                        return getDataByIds(optionalFilter.id);
+                    } else if (optionalFilter.uuid !== undefined) {
+                        return getDataByUuids(optionalFilter.uuid);
+                    } else if (optionalFilter.status) {
+                        return getDataByStatus(optionalFilter.status);
+                    }
+                } else {
+                    return qq.extend([], data, true);
+                }
+            },
+            reset: function() {
+                data = [];
+                byUuid = {};
+                byStatus = {};
+                byBatchId = {};
+            },
+            setStatus: function(id, newStatus) {
+                var oldStatus = data[id].status, byStatusOldStatusIndex = qq.indexOf(byStatus[oldStatus], id);
+                byStatus[oldStatus].splice(byStatusOldStatusIndex, 1);
+                data[id].status = newStatus;
+                if (byStatus[newStatus] === undefined) {
+                    byStatus[newStatus] = [];
+                }
+                byStatus[newStatus].push(id);
+                uploaderProxy.onStatusChange(id, oldStatus, newStatus);
+            },
+            uuidChanged: function(id, newUuid) {
+                var oldUuid = data[id].uuid;
+                data[id].uuid = newUuid;
+                byUuid[newUuid] = id;
+                delete byUuid[oldUuid];
+            },
+            updateName: function(id, newName) {
+                data[id].name = newName;
+            },
+            updateSize: function(id, newSize) {
+                data[id].size = newSize;
+            },
+            setParentId: function(targetId, parentId) {
+                data[targetId].parentId = parentId;
+            },
+            getIdsInProxyGroup: function(id) {
+                var proxyGroupId = data[id].proxyGroupId;
+                if (proxyGroupId) {
+                    return byProxyGroupId[proxyGroupId];
+                }
+                return [];
+            },
+            getIdsInBatch: function(id) {
+                var batchId = data[id].batchId;
+                return byBatchId[batchId];
+            }
+        });
+    };
+    qq.status = {
+        SUBMITTING: "submitting",
+        SUBMITTED: "submitted",
+        REJECTED: "rejected",
+        QUEUED: "queued",
+        CANCELED: "canceled",
+        PAUSED: "paused",
+        UPLOADING: "uploading",
+        UPLOAD_RETRYING: "retrying upload",
+        UPLOAD_SUCCESSFUL: "upload successful",
+        UPLOAD_FAILED: "upload failed",
+        DELETE_FAILED: "delete failed",
+        DELETING: "deleting",
+        DELETED: "deleted"
+    };
+    (function() {
+        "use strict";
+        qq.basePublicApi = {
+            addBlobs: function(blobDataOrArray, params, endpoint) {
+                this.addFiles(blobDataOrArray, params, endpoint);
+            },
+            addInitialFiles: function(cannedFileList) {
+                var self = this;
+                qq.each(cannedFileList, function(index, cannedFile) {
+                    self._addCannedFile(cannedFile);
+                });
+            },
+            addFiles: function(data, params, endpoint) {
+                this._maybeHandleIos8SafariWorkaround();
+                var batchId = this._storedIds.length === 0 ? qq.getUniqueId() : this._currentBatchId, processBlob = qq.bind(function(blob) {
+                    this._handleNewFile({
+                        blob: blob,
+                        name: this._options.blobs.defaultName
+                    }, batchId, verifiedFiles);
+                }, this), processBlobData = qq.bind(function(blobData) {
+                    this._handleNewFile(blobData, batchId, verifiedFiles);
+                }, this), processCanvas = qq.bind(function(canvas) {
+                    var blob = qq.canvasToBlob(canvas);
+                    this._handleNewFile({
+                        blob: blob,
+                        name: this._options.blobs.defaultName + ".png"
+                    }, batchId, verifiedFiles);
+                }, this), processCanvasData = qq.bind(function(canvasData) {
+                    var normalizedQuality = canvasData.quality && canvasData.quality / 100, blob = qq.canvasToBlob(canvasData.canvas, canvasData.type, normalizedQuality);
+                    this._handleNewFile({
+                        blob: blob,
+                        name: canvasData.name
+                    }, batchId, verifiedFiles);
+                }, this), processFileOrInput = qq.bind(function(fileOrInput) {
+                    if (qq.isInput(fileOrInput) && qq.supportedFeatures.ajaxUploading) {
+                        var files = Array.prototype.slice.call(fileOrInput.files), self = this;
+                        qq.each(files, function(idx, file) {
+                            self._handleNewFile(file, batchId, verifiedFiles);
+                        });
+                    } else {
+                        this._handleNewFile(fileOrInput, batchId, verifiedFiles);
+                    }
+                }, this), normalizeData = function() {
+                    if (qq.isFileList(data)) {
+                        data = Array.prototype.slice.call(data);
+                    }
+                    data = [].concat(data);
+                }, self = this, verifiedFiles = [];
+                this._currentBatchId = batchId;
+                if (data) {
+                    normalizeData();
+                    qq.each(data, function(idx, fileContainer) {
+                        if (qq.isFileOrInput(fileContainer)) {
+                            processFileOrInput(fileContainer);
+                        } else if (qq.isBlob(fileContainer)) {
+                            processBlob(fileContainer);
+                        } else if (qq.isObject(fileContainer)) {
+                            if (fileContainer.blob && fileContainer.name) {
+                                processBlobData(fileContainer);
+                            } else if (fileContainer.canvas && fileContainer.name) {
+                                processCanvasData(fileContainer);
+                            }
+                        } else if (fileContainer.tagName && fileContainer.tagName.toLowerCase() === "canvas") {
+                            processCanvas(fileContainer);
+                        } else {
+                            self.log(fileContainer + " is not a valid file container!  Ignoring!", "warn");
+                        }
+                    });
+                    this.log("Received " + verifiedFiles.length + " files.");
+                    this._prepareItemsForUpload(verifiedFiles, params, endpoint);
+                }
+            },
+            cancel: function(id) {
+                this._handler.cancel(id);
+            },
+            cancelAll: function() {
+                var storedIdsCopy = [], self = this;
+                qq.extend(storedIdsCopy, this._storedIds);
+                qq.each(storedIdsCopy, function(idx, storedFileId) {
+                    self.cancel(storedFileId);
+                });
+                this._handler.cancelAll();
+            },
+            clearStoredFiles: function() {
+                this._storedIds = [];
+            },
+            continueUpload: function(id) {
+                var uploadData = this._uploadData.retrieve({
+                    id: id
+                });
+                if (!qq.supportedFeatures.pause || !this._options.chunking.enabled) {
+                    return false;
+                }
+                if (uploadData.status === qq.status.PAUSED) {
+                    this.log(qq.format("Paused file ID {} ({}) will be continued.  Not paused.", id, this.getName(id)));
+                    this._uploadFile(id);
+                    return true;
+                } else {
+                    this.log(qq.format("Ignoring continue for file ID {} ({}).  Not paused.", id, this.getName(id)), "error");
+                }
+                return false;
+            },
+            deleteFile: function(id) {
+                return this._onSubmitDelete(id);
+            },
+            doesExist: function(fileOrBlobId) {
+                return this._handler.isValid(fileOrBlobId);
+            },
+            drawThumbnail: function(fileId, imgOrCanvas, maxSize, fromServer, customResizeFunction) {
+                var promiseToReturn = new qq.Promise(), fileOrUrl, options;
+                if (this._imageGenerator) {
+                    fileOrUrl = this._thumbnailUrls[fileId];
+                    options = {
+                        customResizeFunction: customResizeFunction,
+                        maxSize: maxSize > 0 ? maxSize : null,
+                        scale: maxSize > 0
+                    };
+                    if (!fromServer && qq.supportedFeatures.imagePreviews) {
+                        fileOrUrl = this.getFile(fileId);
+                    }
+                    if (fileOrUrl == null) {
+                        promiseToReturn.failure({
+                            container: imgOrCanvas,
+                            error: "File or URL not found."
+                        });
+                    } else {
+                        this._imageGenerator.generate(fileOrUrl, imgOrCanvas, options).then(function success(modifiedContainer) {
+                            promiseToReturn.success(modifiedContainer);
+                        }, function failure(container, reason) {
+                            promiseToReturn.failure({
+                                container: container,
+                                error: reason || "Problem generating thumbnail"
+                            });
+                        });
+                    }
+                } else {
+                    promiseToReturn.failure({
+                        container: imgOrCanvas,
+                        error: "Missing image generator module"
+                    });
+                }
+                return promiseToReturn;
+            },
+            getButton: function(fileId) {
+                return this._getButton(this._buttonIdsForFileIds[fileId]);
+            },
+            getEndpoint: function(fileId) {
+                return this._endpointStore.get(fileId);
+            },
+            getFile: function(fileOrBlobId) {
+                return this._handler.getFile(fileOrBlobId) || null;
+            },
+            getInProgress: function() {
+                return this._uploadData.retrieve({
+                    status: [ qq.status.UPLOADING, qq.status.UPLOAD_RETRYING, qq.status.QUEUED ]
+                }).length;
+            },
+            getName: function(id) {
+                return this._uploadData.retrieve({
+                    id: id
+                }).name;
+            },
+            getParentId: function(id) {
+                var uploadDataEntry = this.getUploads({
+                    id: id
+                }), parentId = null;
+                if (uploadDataEntry) {
+                    if (uploadDataEntry.parentId !== undefined) {
+                        parentId = uploadDataEntry.parentId;
+                    }
+                }
+                return parentId;
+            },
+            getResumableFilesData: function() {
+                return this._handler.getResumableFilesData();
+            },
+            getSize: function(id) {
+                return this._uploadData.retrieve({
+                    id: id
+                }).size;
+            },
+            getNetUploads: function() {
+                return this._netUploaded;
+            },
+            getRemainingAllowedItems: function() {
+                var allowedItems = this._currentItemLimit;
+                if (allowedItems > 0) {
+                    return allowedItems - this._netUploadedOrQueued;
+                }
+                return null;
+            },
+            getUploads: function(optionalFilter) {
+                return this._uploadData.retrieve(optionalFilter);
+            },
+            getUuid: function(id) {
+                return this._uploadData.retrieve({
+                    id: id
+                }).uuid;
+            },
+            log: function(str, level) {
+                if (this._options.debug && (!level || level === "info")) {
+                    qq.log("[Fine Uploader " + qq.version + "] " + str);
+                } else if (level && level !== "info") {
+                    qq.log("[Fine Uploader " + qq.version + "] " + str, level);
+                }
+            },
+            pauseUpload: function(id) {
+                var uploadData = this._uploadData.retrieve({
+                    id: id
+                });
+                if (!qq.supportedFeatures.pause || !this._options.chunking.enabled) {
+                    return false;
+                }
+                if (qq.indexOf([ qq.status.UPLOADING, qq.status.UPLOAD_RETRYING ], uploadData.status) >= 0) {
+                    if (this._handler.pause(id)) {
+                        this._uploadData.setStatus(id, qq.status.PAUSED);
+                        return true;
+                    } else {
+                        this.log(qq.format("Unable to pause file ID {} ({}).", id, this.getName(id)), "error");
+                    }
+                } else {
+                    this.log(qq.format("Ignoring pause for file ID {} ({}).  Not in progress.", id, this.getName(id)), "error");
+                }
+                return false;
+            },
+            removeFileRef: function(id) {
+                this._handler.expunge(id);
+            },
+            reset: function() {
+                this.log("Resetting uploader...");
+                this._handler.reset();
+                this._storedIds = [];
+                this._autoRetries = [];
+                this._retryTimeouts = [];
+                this._preventRetries = [];
+                this._thumbnailUrls = [];
+                qq.each(this._buttons, function(idx, button) {
+                    button.reset();
+                });
+                this._paramsStore.reset();
+                this._endpointStore.reset();
+                this._netUploadedOrQueued = 0;
+                this._netUploaded = 0;
+                this._uploadData.reset();
+                this._buttonIdsForFileIds = [];
+                this._pasteHandler && this._pasteHandler.reset();
+                this._options.session.refreshOnReset && this._refreshSessionData();
+                this._succeededSinceLastAllComplete = [];
+                this._failedSinceLastAllComplete = [];
+                this._totalProgress && this._totalProgress.reset();
+            },
+            retry: function(id) {
+                return this._manualRetry(id);
+            },
+            scaleImage: function(id, specs) {
+                var self = this;
+                return qq.Scaler.prototype.scaleImage(id, specs, {
+                    log: qq.bind(self.log, self),
+                    getFile: qq.bind(self.getFile, self),
+                    uploadData: self._uploadData
+                });
+            },
+            setCustomHeaders: function(headers, id) {
+                this._customHeadersStore.set(headers, id);
+            },
+            setDeleteFileCustomHeaders: function(headers, id) {
+                this._deleteFileCustomHeadersStore.set(headers, id);
+            },
+            setDeleteFileEndpoint: function(endpoint, id) {
+                this._deleteFileEndpointStore.set(endpoint, id);
+            },
+            setDeleteFileParams: function(params, id) {
+                this._deleteFileParamsStore.set(params, id);
+            },
+            setEndpoint: function(endpoint, id) {
+                this._endpointStore.set(endpoint, id);
+            },
+            setForm: function(elementOrId) {
+                this._updateFormSupportAndParams(elementOrId);
+            },
+            setItemLimit: function(newItemLimit) {
+                this._currentItemLimit = newItemLimit;
+            },
+            setName: function(id, newName) {
+                this._uploadData.updateName(id, newName);
+            },
+            setParams: function(params, id) {
+                this._paramsStore.set(params, id);
+            },
+            setUuid: function(id, newUuid) {
+                return this._uploadData.uuidChanged(id, newUuid);
+            },
+            setStatus: function(id, newStatus) {
+                var fileRecord = this.getUploads({
+                    id: id
+                });
+                if (!fileRecord) {
+                    throw new qq.Error(id + " is not a valid file ID.");
+                }
+                switch (newStatus) {
+                  case qq.status.DELETED:
+                    this._onDeleteComplete(id, null, false);
+                    break;
+
+                  case qq.status.DELETE_FAILED:
+                    this._onDeleteComplete(id, null, true);
+                    break;
+
+                  default:
+                    var errorMessage = "Method setStatus called on '" + name + "' not implemented yet for " + newStatus;
+                    this.log(errorMessage);
+                    throw new qq.Error(errorMessage);
+                }
+            },
+            uploadStoredFiles: function() {
+                if (this._storedIds.length === 0) {
+                    this._itemError("noFilesError");
+                } else {
+                    this._uploadStoredFiles();
+                }
+            }
+        };
+        qq.basePrivateApi = {
+            _addCannedFile: function(sessionData) {
+                var self = this;
+                return this._uploadData.addFile({
+                    uuid: sessionData.uuid,
+                    name: sessionData.name,
+                    size: sessionData.size,
+                    status: qq.status.UPLOAD_SUCCESSFUL,
+                    onBeforeStatusChange: function(id) {
+                        sessionData.deleteFileEndpoint && self.setDeleteFileEndpoint(sessionData.deleteFileEndpoint, id);
+                        sessionData.deleteFileParams && self.setDeleteFileParams(sessionData.deleteFileParams, id);
+                        if (sessionData.thumbnailUrl) {
+                            self._thumbnailUrls[id] = sessionData.thumbnailUrl;
+                        }
+                        self._netUploaded++;
+                        self._netUploadedOrQueued++;
+                    }
+                });
+            },
+            _annotateWithButtonId: function(file, associatedInput) {
+                if (qq.isFile(file)) {
+                    file.qqButtonId = this._getButtonId(associatedInput);
+                }
+            },
+            _batchError: function(message) {
+                this._options.callbacks.onError(null, null, message, undefined);
+            },
+            _createDeleteHandler: function() {
+                var self = this;
+                return new qq.DeleteFileAjaxRequester({
+                    method: this._options.deleteFile.method.toUpperCase(),
+                    maxConnections: this._options.maxConnections,
+                    uuidParamName: this._options.request.uuidName,
+                    customHeaders: this._deleteFileCustomHeadersStore,
+                    paramsStore: this._deleteFileParamsStore,
+                    endpointStore: this._deleteFileEndpointStore,
+                    cors: this._options.cors,
+                    log: qq.bind(self.log, self),
+                    onDelete: function(id) {
+                        self._onDelete(id);
+                        self._options.callbacks.onDelete(id);
+                    },
+                    onDeleteComplete: function(id, xhrOrXdr, isError) {
+                        self._onDeleteComplete(id, xhrOrXdr, isError);
+                        self._options.callbacks.onDeleteComplete(id, xhrOrXdr, isError);
+                    }
+                });
+            },
+            _createPasteHandler: function() {
+                var self = this;
+                return new qq.PasteSupport({
+                    targetElement: this._options.paste.targetElement,
+                    callbacks: {
+                        log: qq.bind(self.log, self),
+                        pasteReceived: function(blob) {
+                            self._handleCheckedCallback({
+                                name: "onPasteReceived",
+                                callback: qq.bind(self._options.callbacks.onPasteReceived, self, blob),
+                                onSuccess: qq.bind(self._handlePasteSuccess, self, blob),
+                                identifier: "pasted image"
+                            });
+                        }
+                    }
+                });
+            },
+            _createStore: function(initialValue, _readOnlyValues_) {
+                var store = {}, catchall = initialValue, perIdReadOnlyValues = {}, readOnlyValues = _readOnlyValues_, copy = function(orig) {
+                    if (qq.isObject(orig)) {
+                        return qq.extend({}, orig);
+                    }
+                    return orig;
+                }, getReadOnlyValues = function() {
+                    if (qq.isFunction(readOnlyValues)) {
+                        return readOnlyValues();
+                    }
+                    return readOnlyValues;
+                }, includeReadOnlyValues = function(id, existing) {
+                    if (readOnlyValues && qq.isObject(existing)) {
+                        qq.extend(existing, getReadOnlyValues());
+                    }
+                    if (perIdReadOnlyValues[id]) {
+                        qq.extend(existing, perIdReadOnlyValues[id]);
+                    }
+                };
+                return {
+                    set: function(val, id) {
+                        if (id == null) {
+                            store = {};
+                            catchall = copy(val);
+                        } else {
+                            store[id] = copy(val);
+                        }
+                    },
+                    get: function(id) {
+                        var values;
+                        if (id != null && store[id]) {
+                            values = store[id];
+                        } else {
+                            values = copy(catchall);
+                        }
+                        includeReadOnlyValues(id, values);
+                        return copy(values);
+                    },
+                    addReadOnly: function(id, values) {
+                        if (qq.isObject(store)) {
+                            if (id === null) {
+                                if (qq.isFunction(values)) {
+                                    readOnlyValues = values;
+                                } else {
+                                    readOnlyValues = readOnlyValues || {};
+                                    qq.extend(readOnlyValues, values);
+                                }
+                            } else {
+                                perIdReadOnlyValues[id] = perIdReadOnlyValues[id] || {};
+                                qq.extend(perIdReadOnlyValues[id], values);
+                            }
+                        }
+                    },
+                    remove: function(fileId) {
+                        return delete store[fileId];
+                    },
+                    reset: function() {
+                        store = {};
+                        perIdReadOnlyValues = {};
+                        catchall = initialValue;
+                    }
+                };
+            },
+            _createUploadDataTracker: function() {
+                var self = this;
+                return new qq.UploadData({
+                    getName: function(id) {
+                        return self.getName(id);
+                    },
+                    getUuid: function(id) {
+                        return self.getUuid(id);
+                    },
+                    getSize: function(id) {
+                        return self.getSize(id);
+                    },
+                    onStatusChange: function(id, oldStatus, newStatus) {
+                        self._onUploadStatusChange(id, oldStatus, newStatus);
+                        self._options.callbacks.onStatusChange(id, oldStatus, newStatus);
+                        self._maybeAllComplete(id, newStatus);
+                        if (self._totalProgress) {
+                            setTimeout(function() {
+                                self._totalProgress.onStatusChange(id, oldStatus, newStatus);
+                            }, 0);
+                        }
+                    }
+                });
+            },
+            _createUploadButton: function(spec) {
+                var self = this, acceptFiles = spec.accept || this._options.validation.acceptFiles, allowedExtensions = spec.allowedExtensions || this._options.validation.allowedExtensions, button;
+                function allowMultiple() {
+                    if (qq.supportedFeatures.ajaxUploading) {
+                        if (self._options.workarounds.iosEmptyVideos && qq.ios() && !qq.ios6() && self._isAllowedExtension(allowedExtensions, ".mov")) {
+                            return false;
+                        }
+                        if (spec.multiple === undefined) {
+                            return self._options.multiple;
+                        }
+                        return spec.multiple;
+                    }
+                    return false;
+                }
+                button = new qq.UploadButton({
+                    acceptFiles: acceptFiles,
+                    element: spec.element,
+                    focusClass: this._options.classes.buttonFocus,
+                    folders: spec.folders,
+                    hoverClass: this._options.classes.buttonHover,
+                    ios8BrowserCrashWorkaround: this._options.workarounds.ios8BrowserCrash,
+                    multiple: allowMultiple(),
+                    name: this._options.request.inputName,
+                    onChange: function(input) {
+                        self._onInputChange(input);
+                    },
+                    title: spec.title == null ? this._options.text.fileInputTitle : spec.title
+                });
+                this._disposeSupport.addDisposer(function() {
+                    button.dispose();
+                });
+                self._buttons.push(button);
+                return button;
+            },
+            _createUploadHandler: function(additionalOptions, namespace) {
+                var self = this, lastOnProgress = {}, options = {
+                    debug: this._options.debug,
+                    maxConnections: this._options.maxConnections,
+                    cors: this._options.cors,
+                    paramsStore: this._paramsStore,
+                    endpointStore: this._endpointStore,
+                    chunking: this._options.chunking,
+                    resume: this._options.resume,
+                    blobs: this._options.blobs,
+                    log: qq.bind(self.log, self),
+                    preventRetryParam: this._options.retry.preventRetryResponseProperty,
+                    onProgress: function(id, name, loaded, total) {
+                        if (loaded < 0 || total < 0) {
+                            return;
+                        }
+                        if (lastOnProgress[id]) {
+                            if (lastOnProgress[id].loaded !== loaded || lastOnProgress[id].total !== total) {
+                                self._onProgress(id, name, loaded, total);
+                                self._options.callbacks.onProgress(id, name, loaded, total);
+                            }
+                        } else {
+                            self._onProgress(id, name, loaded, total);
+                            self._options.callbacks.onProgress(id, name, loaded, total);
+                        }
+                        lastOnProgress[id] = {
+                            loaded: loaded,
+                            total: total
+                        };
+                    },
+                    onComplete: function(id, name, result, xhr) {
+                        delete lastOnProgress[id];
+                        var status = self.getUploads({
+                            id: id
+                        }).status, retVal;
+                        if (status === qq.status.UPLOAD_SUCCESSFUL || status === qq.status.UPLOAD_FAILED) {
+                            return;
+                        }
+                        retVal = self._onComplete(id, name, result, xhr);
+                        if (retVal instanceof qq.Promise) {
+                            retVal.done(function() {
+                                self._options.callbacks.onComplete(id, name, result, xhr);
+                            });
+                        } else {
+                            self._options.callbacks.onComplete(id, name, result, xhr);
+                        }
+                    },
+                    onCancel: function(id, name, cancelFinalizationEffort) {
+                        var promise = new qq.Promise();
+                        self._handleCheckedCallback({
+                            name: "onCancel",
+                            callback: qq.bind(self._options.callbacks.onCancel, self, id, name),
+                            onFailure: promise.failure,
+                            onSuccess: function() {
+                                cancelFinalizationEffort.then(function() {
+                                    self._onCancel(id, name);
+                                });
+                                promise.success();
+                            },
+                            identifier: id
+                        });
+                        return promise;
+                    },
+                    onUploadPrep: qq.bind(this._onUploadPrep, this),
+                    onUpload: function(id, name) {
+                        self._onUpload(id, name);
+                        self._options.callbacks.onUpload(id, name);
+                    },
+                    onUploadChunk: function(id, name, chunkData) {
+                        self._onUploadChunk(id, chunkData);
+                        self._options.callbacks.onUploadChunk(id, name, chunkData);
+                    },
+                    onUploadChunkSuccess: function(id, chunkData, result, xhr) {
+                        self._options.callbacks.onUploadChunkSuccess.apply(self, arguments);
+                    },
+                    onResume: function(id, name, chunkData) {
+                        return self._options.callbacks.onResume(id, name, chunkData);
+                    },
+                    onAutoRetry: function(id, name, responseJSON, xhr) {
+                        return self._onAutoRetry.apply(self, arguments);
+                    },
+                    onUuidChanged: function(id, newUuid) {
+                        self.log("Server requested UUID change from '" + self.getUuid(id) + "' to '" + newUuid + "'");
+                        self.setUuid(id, newUuid);
+                    },
+                    getName: qq.bind(self.getName, self),
+                    getUuid: qq.bind(self.getUuid, self),
+                    getSize: qq.bind(self.getSize, self),
+                    setSize: qq.bind(self._setSize, self),
+                    getDataByUuid: function(uuid) {
+                        return self.getUploads({
+                            uuid: uuid
+                        });
+                    },
+                    isQueued: function(id) {
+                        var status = self.getUploads({
+                            id: id
+                        }).status;
+                        return status === qq.status.QUEUED || status === qq.status.SUBMITTED || status === qq.status.UPLOAD_RETRYING || status === qq.status.PAUSED;
+                    },
+                    getIdsInProxyGroup: self._uploadData.getIdsInProxyGroup,
+                    getIdsInBatch: self._uploadData.getIdsInBatch
+                };
+                qq.each(this._options.request, function(prop, val) {
+                    options[prop] = val;
+                });
+                options.customHeaders = this._customHeadersStore;
+                if (additionalOptions) {
+                    qq.each(additionalOptions, function(key, val) {
+                        options[key] = val;
+                    });
+                }
+                return new qq.UploadHandlerController(options, namespace);
+            },
+            _fileOrBlobRejected: function(id) {
+                this._netUploadedOrQueued--;
+                this._uploadData.setStatus(id, qq.status.REJECTED);
+            },
+            _formatSize: function(bytes) {
+                if (bytes === 0) {
+                    return bytes + this._options.text.sizeSymbols[0];
+                }
+                var i = -1;
+                do {
+                    bytes = bytes / 1e3;
+                    i++;
+                } while (bytes > 999);
+                return Math.max(bytes, .1).toFixed(1) + this._options.text.sizeSymbols[i];
+            },
+            _generateExtraButtonSpecs: function() {
+                var self = this;
+                this._extraButtonSpecs = {};
+                qq.each(this._options.extraButtons, function(idx, extraButtonOptionEntry) {
+                    var multiple = extraButtonOptionEntry.multiple, validation = qq.extend({}, self._options.validation, true), extraButtonSpec = qq.extend({}, extraButtonOptionEntry);
+                    if (multiple === undefined) {
+                        multiple = self._options.multiple;
+                    }
+                    if (extraButtonSpec.validation) {
+                        qq.extend(validation, extraButtonOptionEntry.validation, true);
+                    }
+                    qq.extend(extraButtonSpec, {
+                        multiple: multiple,
+                        validation: validation
+                    }, true);
+                    self._initExtraButton(extraButtonSpec);
+                });
+            },
+            _getButton: function(buttonId) {
+                var extraButtonsSpec = this._extraButtonSpecs[buttonId];
+                if (extraButtonsSpec) {
+                    return extraButtonsSpec.element;
+                } else if (buttonId === this._defaultButtonId) {
+                    return this._options.button;
+                }
+            },
+            _getButtonId: function(buttonOrFileInputOrFile) {
+                var inputs, fileInput, fileBlobOrInput = buttonOrFileInputOrFile;
+                if (fileBlobOrInput instanceof qq.BlobProxy) {
+                    fileBlobOrInput = fileBlobOrInput.referenceBlob;
+                }
+                if (fileBlobOrInput && !qq.isBlob(fileBlobOrInput)) {
+                    if (qq.isFile(fileBlobOrInput)) {
+                        return fileBlobOrInput.qqButtonId;
+                    } else if (fileBlobOrInput.tagName.toLowerCase() === "input" && fileBlobOrInput.type.toLowerCase() === "file") {
+                        return fileBlobOrInput.getAttribute(qq.UploadButton.BUTTON_ID_ATTR_NAME);
+                    }
+                    inputs = fileBlobOrInput.getElementsByTagName("input");
+                    qq.each(inputs, function(idx, input) {
+                        if (input.getAttribute("type") === "file") {
+                            fileInput = input;
+                            return false;
+                        }
+                    });
+                    if (fileInput) {
+                        return fileInput.getAttribute(qq.UploadButton.BUTTON_ID_ATTR_NAME);
+                    }
+                }
+            },
+            _getNotFinished: function() {
+                return this._uploadData.retrieve({
+                    status: [ qq.status.UPLOADING, qq.status.UPLOAD_RETRYING, qq.status.QUEUED, qq.status.SUBMITTING, qq.status.SUBMITTED, qq.status.PAUSED ]
+                }).length;
+            },
+            _getValidationBase: function(buttonId) {
+                var extraButtonSpec = this._extraButtonSpecs[buttonId];
+                return extraButtonSpec ? extraButtonSpec.validation : this._options.validation;
+            },
+            _getValidationDescriptor: function(fileWrapper) {
+                if (fileWrapper.file instanceof qq.BlobProxy) {
+                    return {
+                        name: qq.getFilename(fileWrapper.file.referenceBlob),
+                        size: fileWrapper.file.referenceBlob.size
+                    };
+                }
+                return {
+                    name: this.getUploads({
+                        id: fileWrapper.id
+                    }).name,
+                    size: this.getUploads({
+                        id: fileWrapper.id
+                    }).size
+                };
+            },
+            _getValidationDescriptors: function(fileWrappers) {
+                var self = this, fileDescriptors = [];
+                qq.each(fileWrappers, function(idx, fileWrapper) {
+                    fileDescriptors.push(self._getValidationDescriptor(fileWrapper));
+                });
+                return fileDescriptors;
+            },
+            _handleCameraAccess: function() {
+                if (this._options.camera.ios && qq.ios()) {
+                    var acceptIosCamera = "image/*;capture=camera", button = this._options.camera.button, buttonId = button ? this._getButtonId(button) : this._defaultButtonId, optionRoot = this._options;
+                    if (buttonId && buttonId !== this._defaultButtonId) {
+                        optionRoot = this._extraButtonSpecs[buttonId];
+                    }
+                    optionRoot.multiple = false;
+                    if (optionRoot.validation.acceptFiles === null) {
+                        optionRoot.validation.acceptFiles = acceptIosCamera;
+                    } else {
+                        optionRoot.validation.acceptFiles += "," + acceptIosCamera;
+                    }
+                    qq.each(this._buttons, function(idx, button) {
+                        if (button.getButtonId() === buttonId) {
+                            button.setMultiple(optionRoot.multiple);
+                            button.setAcceptFiles(optionRoot.acceptFiles);
+                            return false;
+                        }
+                    });
+                }
+            },
+            _handleCheckedCallback: function(details) {
+                var self = this, callbackRetVal = details.callback();
+                if (qq.isGenericPromise(callbackRetVal)) {
+                    this.log(details.name + " - waiting for " + details.name + " promise to be fulfilled for " + details.identifier);
+                    return callbackRetVal.then(function(successParam) {
+                        self.log(details.name + " promise success for " + details.identifier);
+                        details.onSuccess(successParam);
+                    }, function() {
+                        if (details.onFailure) {
+                            self.log(details.name + " promise failure for " + details.identifier);
+                            details.onFailure();
+                        } else {
+                            self.log(details.name + " promise failure for " + details.identifier);
+                        }
+                    });
+                }
+                if (callbackRetVal !== false) {
+                    details.onSuccess(callbackRetVal);
+                } else {
+                    if (details.onFailure) {
+                        this.log(details.name + " - return value was 'false' for " + details.identifier + ".  Invoking failure callback.");
+                        details.onFailure();
+                    } else {
+                        this.log(details.name + " - return value was 'false' for " + details.identifier + ".  Will not proceed.");
+                    }
+                }
+                return callbackRetVal;
+            },
+            _handleNewFile: function(file, batchId, newFileWrapperList) {
+                var self = this, uuid = qq.getUniqueId(), size = -1, name = qq.getFilename(file), actualFile = file.blob || file, handler = this._customNewFileHandler ? this._customNewFileHandler : qq.bind(self._handleNewFileGeneric, self);
+                if (!qq.isInput(actualFile) && actualFile.size >= 0) {
+                    size = actualFile.size;
+                }
+                handler(actualFile, name, uuid, size, newFileWrapperList, batchId, this._options.request.uuidName, {
+                    uploadData: self._uploadData,
+                    paramsStore: self._paramsStore,
+                    addFileToHandler: function(id, file) {
+                        self._handler.add(id, file);
+                        self._netUploadedOrQueued++;
+                        self._trackButton(id);
+                    }
+                });
+            },
+            _handleNewFileGeneric: function(file, name, uuid, size, fileList, batchId) {
+                var id = this._uploadData.addFile({
+                    uuid: uuid,
+                    name: name,
+                    size: size,
+                    batchId: batchId
+                });
+                this._handler.add(id, file);
+                this._trackButton(id);
+                this._netUploadedOrQueued++;
+                fileList.push({
+                    id: id,
+                    file: file
+                });
+            },
+            _handlePasteSuccess: function(blob, extSuppliedName) {
+                var extension = blob.type.split("/")[1], name = extSuppliedName;
+                if (name == null) {
+                    name = this._options.paste.defaultName;
+                }
+                name += "." + extension;
+                this.addFiles({
+                    name: name,
+                    blob: blob
+                });
+            },
+            _handleDeleteSuccess: function(id) {
+                if (this.getUploads({
+                    id: id
+                }).status !== qq.status.DELETED) {
+                    var name = this.getName(id);
+                    this._netUploadedOrQueued--;
+                    this._netUploaded--;
+                    this._handler.expunge(id);
+                    this._uploadData.setStatus(id, qq.status.DELETED);
+                    this.log("Delete request for '" + name + "' has succeeded.");
+                }
+            },
+            _handleDeleteFailed: function(id, xhrOrXdr) {
+                var name = this.getName(id);
+                this._uploadData.setStatus(id, qq.status.DELETE_FAILED);
+                this.log("Delete request for '" + name + "' has failed.", "error");
+                if (!xhrOrXdr || xhrOrXdr.withCredentials === undefined) {
+                    this._options.callbacks.onError(id, name, "Delete request failed", xhrOrXdr);
+                } else {
+                    this._options.callbacks.onError(id, name, "Delete request failed with response code " + xhrOrXdr.status, xhrOrXdr);
+                }
+            },
+            _initExtraButton: function(spec) {
+                var button = this._createUploadButton({
+                    accept: spec.validation.acceptFiles,
+                    allowedExtensions: spec.validation.allowedExtensions,
+                    element: spec.element,
+                    folders: spec.folders,
+                    multiple: spec.multiple,
+                    title: spec.fileInputTitle
+                });
+                this._extraButtonSpecs[button.getButtonId()] = spec;
+            },
+            _initFormSupportAndParams: function() {
+                this._formSupport = qq.FormSupport && new qq.FormSupport(this._options.form, qq.bind(this.uploadStoredFiles, this), qq.bind(this.log, this));
+                if (this._formSupport && this._formSupport.attachedToForm) {
+                    this._paramsStore = this._createStore(this._options.request.params, this._formSupport.getFormInputsAsObject);
+                    this._options.autoUpload = this._formSupport.newAutoUpload;
+                    if (this._formSupport.newEndpoint) {
+                        this._options.request.endpoint = this._formSupport.newEndpoint;
+                    }
+                } else {
+                    this._paramsStore = this._createStore(this._options.request.params);
+                }
+            },
+            _isDeletePossible: function() {
+                if (!qq.DeleteFileAjaxRequester || !this._options.deleteFile.enabled) {
+                    return false;
+                }
+                if (this._options.cors.expected) {
+                    if (qq.supportedFeatures.deleteFileCorsXhr) {
+                        return true;
+                    }
+                    if (qq.supportedFeatures.deleteFileCorsXdr && this._options.cors.allowXdr) {
+                        return true;
+                    }
+                    return false;
+                }
+                return true;
+            },
+            _isAllowedExtension: function(allowed, fileName) {
+                var valid = false;
+                if (!allowed.length) {
+                    return true;
+                }
+                qq.each(allowed, function(idx, allowedExt) {
+                    if (qq.isString(allowedExt)) {
+                        var extRegex = new RegExp("\\." + allowedExt + "$", "i");
+                        if (fileName.match(extRegex) != null) {
+                            valid = true;
+                            return false;
+                        }
+                    }
+                });
+                return valid;
+            },
+            _itemError: function(code, maybeNameOrNames, item) {
+                var message = this._options.messages[code], allowedExtensions = [], names = [].concat(maybeNameOrNames), name = names[0], buttonId = this._getButtonId(item), validationBase = this._getValidationBase(buttonId), extensionsForMessage, placeholderMatch;
+                function r(name, replacement) {
+                    message = message.replace(name, replacement);
+                }
+                qq.each(validationBase.allowedExtensions, function(idx, allowedExtension) {
+                    if (qq.isString(allowedExtension)) {
+                        allowedExtensions.push(allowedExtension);
+                    }
+                });
+                extensionsForMessage = allowedExtensions.join(", ").toLowerCase();
+                r("{file}", this._options.formatFileName(name));
+                r("{extensions}", extensionsForMessage);
+                r("{sizeLimit}", this._formatSize(validationBase.sizeLimit));
+                r("{minSizeLimit}", this._formatSize(validationBase.minSizeLimit));
+                placeholderMatch = message.match(/(\{\w+\})/g);
+                if (placeholderMatch !== null) {
+                    qq.each(placeholderMatch, function(idx, placeholder) {
+                        r(placeholder, names[idx]);
+                    });
+                }
+                this._options.callbacks.onError(null, name, message, undefined);
+                return message;
+            },
+            _manualRetry: function(id, callback) {
+                if (this._onBeforeManualRetry(id)) {
+                    this._netUploadedOrQueued++;
+                    this._uploadData.setStatus(id, qq.status.UPLOAD_RETRYING);
+                    if (callback) {
+                        callback(id);
+                    } else {
+                        this._handler.retry(id);
+                    }
+                    return true;
+                }
+            },
+            _maybeAllComplete: function(id, status) {
+                var self = this, notFinished = this._getNotFinished();
+                if (status === qq.status.UPLOAD_SUCCESSFUL) {
+                    this._succeededSinceLastAllComplete.push(id);
+                } else if (status === qq.status.UPLOAD_FAILED) {
+                    this._failedSinceLastAllComplete.push(id);
+                }
+                if (notFinished === 0 && (this._succeededSinceLastAllComplete.length || this._failedSinceLastAllComplete.length)) {
+                    setTimeout(function() {
+                        self._onAllComplete(self._succeededSinceLastAllComplete, self._failedSinceLastAllComplete);
+                    }, 0);
+                }
+            },
+            _maybeHandleIos8SafariWorkaround: function() {
+                var self = this;
+                if (this._options.workarounds.ios8SafariUploads && qq.ios800() && qq.iosSafari()) {
+                    setTimeout(function() {
+                        window.alert(self._options.messages.unsupportedBrowserIos8Safari);
+                    }, 0);
+                    throw new qq.Error(this._options.messages.unsupportedBrowserIos8Safari);
+                }
+            },
+            _maybeParseAndSendUploadError: function(id, name, response, xhr) {
+                if (!response.success) {
+                    if (xhr && xhr.status !== 200 && !response.error) {
+                        this._options.callbacks.onError(id, name, "XHR returned response code " + xhr.status, xhr);
+                    } else {
+                        var errorReason = response.error ? response.error : this._options.text.defaultResponseError;
+                        this._options.callbacks.onError(id, name, errorReason, xhr);
+                    }
+                }
+            },
+            _maybeProcessNextItemAfterOnValidateCallback: function(validItem, items, index, params, endpoint) {
+                var self = this;
+                if (items.length > index) {
+                    if (validItem || !this._options.validation.stopOnFirstInvalidFile) {
+                        setTimeout(function() {
+                            var validationDescriptor = self._getValidationDescriptor(items[index]), buttonId = self._getButtonId(items[index].file), button = self._getButton(buttonId);
+                            self._handleCheckedCallback({
+                                name: "onValidate",
+                                callback: qq.bind(self._options.callbacks.onValidate, self, validationDescriptor, button),
+                                onSuccess: qq.bind(self._onValidateCallbackSuccess, self, items, index, params, endpoint),
+                                onFailure: qq.bind(self._onValidateCallbackFailure, self, items, index, params, endpoint),
+                                identifier: "Item '" + validationDescriptor.name + "', size: " + validationDescriptor.size
+                            });
+                        }, 0);
+                    } else if (!validItem) {
+                        for (;index < items.length; index++) {
+                            self._fileOrBlobRejected(items[index].id);
+                        }
+                    }
+                }
+            },
+            _onAllComplete: function(successful, failed) {
+                this._totalProgress && this._totalProgress.onAllComplete(successful, failed, this._preventRetries);
+                this._options.callbacks.onAllComplete(qq.extend([], successful), qq.extend([], failed));
+                this._succeededSinceLastAllComplete = [];
+                this._failedSinceLastAllComplete = [];
+            },
+            _onAutoRetry: function(id, name, responseJSON, xhr, callback) {
+                var self = this;
+                self._preventRetries[id] = responseJSON[self._options.retry.preventRetryResponseProperty];
+                if (self._shouldAutoRetry(id, name, responseJSON)) {
+                    var retryWaitPeriod = self._options.retry.autoAttemptDelay * 1e3;
+                    self._maybeParseAndSendUploadError.apply(self, arguments);
+                    self._options.callbacks.onAutoRetry(id, name, self._autoRetries[id]);
+                    self._onBeforeAutoRetry(id, name);
+                    self._uploadData.setStatus(id, qq.status.UPLOAD_RETRYING);
+                    self._retryTimeouts[id] = setTimeout(function() {
+                        self.log("Starting retry for " + name + "...");
+                        if (callback) {
+                            callback(id);
+                        } else {
+                            self._handler.retry(id);
+                        }
+                    }, retryWaitPeriod);
+                    return true;
+                }
+            },
+            _onBeforeAutoRetry: function(id, name) {
+                this.log("Waiting " + this._options.retry.autoAttemptDelay + " seconds before retrying " + name + "...");
+            },
+            _onBeforeManualRetry: function(id) {
+                var itemLimit = this._currentItemLimit, fileName;
+                if (this._preventRetries[id]) {
+                    this.log("Retries are forbidden for id " + id, "warn");
+                    return false;
+                } else if (this._handler.isValid(id)) {
+                    fileName = this.getName(id);
+                    if (this._options.callbacks.onManualRetry(id, fileName) === false) {
+                        return false;
+                    }
+                    if (itemLimit > 0 && this._netUploadedOrQueued + 1 > itemLimit) {
+                        this._itemError("retryFailTooManyItems");
+                        return false;
+                    }
+                    this.log("Retrying upload for '" + fileName + "' (id: " + id + ")...");
+                    return true;
+                } else {
+                    this.log("'" + id + "' is not a valid file ID", "error");
+                    return false;
+                }
+            },
+            _onCancel: function(id, name) {
+                this._netUploadedOrQueued--;
+                clearTimeout(this._retryTimeouts[id]);
+                var storedItemIndex = qq.indexOf(this._storedIds, id);
+                if (!this._options.autoUpload && storedItemIndex >= 0) {
+                    this._storedIds.splice(storedItemIndex, 1);
+                }
+                this._uploadData.setStatus(id, qq.status.CANCELED);
+            },
+            _onComplete: function(id, name, result, xhr) {
+                if (!result.success) {
+                    this._netUploadedOrQueued--;
+                    this._uploadData.setStatus(id, qq.status.UPLOAD_FAILED);
+                    if (result[this._options.retry.preventRetryResponseProperty] === true) {
+                        this._preventRetries[id] = true;
+                    }
+                } else {
+                    if (result.thumbnailUrl) {
+                        this._thumbnailUrls[id] = result.thumbnailUrl;
+                    }
+                    this._netUploaded++;
+                    this._uploadData.setStatus(id, qq.status.UPLOAD_SUCCESSFUL);
+                }
+                this._maybeParseAndSendUploadError(id, name, result, xhr);
+                return result.success ? true : false;
+            },
+            _onDelete: function(id) {
+                this._uploadData.setStatus(id, qq.status.DELETING);
+            },
+            _onDeleteComplete: function(id, xhrOrXdr, isError) {
+                var name = this.getName(id);
+                if (isError) {
+                    this._handleDeleteFailed(id, xhrOrXdr);
+                } else {
+                    this._handleDeleteSuccess(id);
+                }
+            },
+            _onInputChange: function(input) {
+                var fileIndex;
+                if (qq.supportedFeatures.ajaxUploading) {
+                    for (fileIndex = 0; fileIndex < input.files.length; fileIndex++) {
+                        this._annotateWithButtonId(input.files[fileIndex], input);
+                    }
+                    this.addFiles(input.files);
+                } else if (input.value.length > 0) {
+                    this.addFiles(input);
+                }
+                qq.each(this._buttons, function(idx, button) {
+                    button.reset();
+                });
+            },
+            _onProgress: function(id, name, loaded, total) {
+                this._totalProgress && this._totalProgress.onIndividualProgress(id, loaded, total);
+            },
+            _onSubmit: function(id, name) {},
+            _onSubmitCallbackSuccess: function(id, name) {
+                this._onSubmit.apply(this, arguments);
+                this._uploadData.setStatus(id, qq.status.SUBMITTED);
+                this._onSubmitted.apply(this, arguments);
+                if (this._options.autoUpload) {
+                    this._options.callbacks.onSubmitted.apply(this, arguments);
+                    this._uploadFile(id);
+                } else {
+                    this._storeForLater(id);
+                    this._options.callbacks.onSubmitted.apply(this, arguments);
+                }
+            },
+            _onSubmitDelete: function(id, onSuccessCallback, additionalMandatedParams) {
+                var uuid = this.getUuid(id), adjustedOnSuccessCallback;
+                if (onSuccessCallback) {
+                    adjustedOnSuccessCallback = qq.bind(onSuccessCallback, this, id, uuid, additionalMandatedParams);
+                }
+                if (this._isDeletePossible()) {
+                    this._handleCheckedCallback({
+                        name: "onSubmitDelete",
+                        callback: qq.bind(this._options.callbacks.onSubmitDelete, this, id),
+                        onSuccess: adjustedOnSuccessCallback || qq.bind(this._deleteHandler.sendDelete, this, id, uuid, additionalMandatedParams),
+                        identifier: id
+                    });
+                    return true;
+                } else {
+                    this.log("Delete request ignored for ID " + id + ", delete feature is disabled or request not possible " + "due to CORS on a user agent that does not support pre-flighting.", "warn");
+                    return false;
+                }
+            },
+            _onSubmitted: function(id) {},
+            _onTotalProgress: function(loaded, total) {
+                this._options.callbacks.onTotalProgress(loaded, total);
+            },
+            _onUploadPrep: function(id) {},
+            _onUpload: function(id, name) {
+                this._uploadData.setStatus(id, qq.status.UPLOADING);
+            },
+            _onUploadChunk: function(id, chunkData) {},
+            _onUploadStatusChange: function(id, oldStatus, newStatus) {
+                if (newStatus === qq.status.PAUSED) {
+                    clearTimeout(this._retryTimeouts[id]);
+                }
+            },
+            _onValidateBatchCallbackFailure: function(fileWrappers) {
+                var self = this;
+                qq.each(fileWrappers, function(idx, fileWrapper) {
+                    self._fileOrBlobRejected(fileWrapper.id);
+                });
+            },
+            _onValidateBatchCallbackSuccess: function(validationDescriptors, items, params, endpoint, button) {
+                var errorMessage, itemLimit = this._currentItemLimit, proposedNetFilesUploadedOrQueued = this._netUploadedOrQueued;
+                if (itemLimit === 0 || proposedNetFilesUploadedOrQueued <= itemLimit) {
+                    if (items.length > 0) {
+                        this._handleCheckedCallback({
+                            name: "onValidate",
+                            callback: qq.bind(this._options.callbacks.onValidate, this, validationDescriptors[0], button),
+                            onSuccess: qq.bind(this._onValidateCallbackSuccess, this, items, 0, params, endpoint),
+                            onFailure: qq.bind(this._onValidateCallbackFailure, this, items, 0, params, endpoint),
+                            identifier: "Item '" + items[0].file.name + "', size: " + items[0].file.size
+                        });
+                    } else {
+                        this._itemError("noFilesError");
+                    }
+                } else {
+                    this._onValidateBatchCallbackFailure(items);
+                    errorMessage = this._options.messages.tooManyItemsError.replace(/\{netItems\}/g, proposedNetFilesUploadedOrQueued).replace(/\{itemLimit\}/g, itemLimit);
+                    this._batchError(errorMessage);
+                }
+            },
+            _onValidateCallbackFailure: function(items, index, params, endpoint) {
+                var nextIndex = index + 1;
+                this._fileOrBlobRejected(items[index].id, items[index].file.name);
+                this._maybeProcessNextItemAfterOnValidateCallback(false, items, nextIndex, params, endpoint);
+            },
+            _onValidateCallbackSuccess: function(items, index, params, endpoint) {
+                var self = this, nextIndex = index + 1, validationDescriptor = this._getValidationDescriptor(items[index]);
+                this._validateFileOrBlobData(items[index], validationDescriptor).then(function() {
+                    self._upload(items[index].id, params, endpoint);
+                    self._maybeProcessNextItemAfterOnValidateCallback(true, items, nextIndex, params, endpoint);
+                }, function() {
+                    self._maybeProcessNextItemAfterOnValidateCallback(false, items, nextIndex, params, endpoint);
+                });
+            },
+            _prepareItemsForUpload: function(items, params, endpoint) {
+                if (items.length === 0) {
+                    this._itemError("noFilesError");
+                    return;
+                }
+                var validationDescriptors = this._getValidationDescriptors(items), buttonId = this._getButtonId(items[0].file), button = this._getButton(buttonId);
+                this._handleCheckedCallback({
+                    name: "onValidateBatch",
+                    callback: qq.bind(this._options.callbacks.onValidateBatch, this, validationDescriptors, button),
+                    onSuccess: qq.bind(this._onValidateBatchCallbackSuccess, this, validationDescriptors, items, params, endpoint, button),
+                    onFailure: qq.bind(this._onValidateBatchCallbackFailure, this, items),
+                    identifier: "batch validation"
+                });
+            },
+            _preventLeaveInProgress: function() {
+                var self = this;
+                this._disposeSupport.attach(window, "beforeunload", function(e) {
+                    if (self.getInProgress()) {
+                        e = e || window.event;
+                        e.returnValue = self._options.messages.onLeave;
+                        return self._options.messages.onLeave;
+                    }
+                });
+            },
+            _refreshSessionData: function() {
+                var self = this, options = this._options.session;
+                if (qq.Session && this._options.session.endpoint != null) {
+                    if (!this._session) {
+                        qq.extend(options, {
+                            cors: this._options.cors
+                        });
+                        options.log = qq.bind(this.log, this);
+                        options.addFileRecord = qq.bind(this._addCannedFile, this);
+                        this._session = new qq.Session(options);
+                    }
+                    setTimeout(function() {
+                        self._session.refresh().then(function(response, xhrOrXdr) {
+                            self._sessionRequestComplete();
+                            self._options.callbacks.onSessionRequestComplete(response, true, xhrOrXdr);
+                        }, function(response, xhrOrXdr) {
+                            self._options.callbacks.onSessionRequestComplete(response, false, xhrOrXdr);
+                        });
+                    }, 0);
+                }
+            },
+            _sessionRequestComplete: function() {},
+            _setSize: function(id, newSize) {
+                this._uploadData.updateSize(id, newSize);
+                this._totalProgress && this._totalProgress.onNewSize(id);
+            },
+            _shouldAutoRetry: function(id, name, responseJSON) {
+                var uploadData = this._uploadData.retrieve({
+                    id: id
+                });
+                if (!this._preventRetries[id] && this._options.retry.enableAuto && uploadData.status !== qq.status.PAUSED) {
+                    if (this._autoRetries[id] === undefined) {
+                        this._autoRetries[id] = 0;
+                    }
+                    if (this._autoRetries[id] < this._options.retry.maxAutoAttempts) {
+                        this._autoRetries[id] += 1;
+                        return true;
+                    }
+                }
+                return false;
+            },
+            _storeForLater: function(id) {
+                this._storedIds.push(id);
+            },
+            _trackButton: function(id) {
+                var buttonId;
+                if (qq.supportedFeatures.ajaxUploading) {
+                    buttonId = this._handler.getFile(id).qqButtonId;
+                } else {
+                    buttonId = this._getButtonId(this._handler.getInput(id));
+                }
+                if (buttonId) {
+                    this._buttonIdsForFileIds[id] = buttonId;
+                }
+            },
+            _updateFormSupportAndParams: function(formElementOrId) {
+                this._options.form.element = formElementOrId;
+                this._formSupport = qq.FormSupport && new qq.FormSupport(this._options.form, qq.bind(this.uploadStoredFiles, this), qq.bind(this.log, this));
+                if (this._formSupport && this._formSupport.attachedToForm) {
+                    this._paramsStore.addReadOnly(null, this._formSupport.getFormInputsAsObject);
+                    this._options.autoUpload = this._formSupport.newAutoUpload;
+                    if (this._formSupport.newEndpoint) {
+                        this.setEndpoint(this._formSupport.newEndpoint);
+                    }
+                }
+            },
+            _upload: function(id, params, endpoint) {
+                var name = this.getName(id);
+                if (params) {
+                    this.setParams(params, id);
+                }
+                if (endpoint) {
+                    this.setEndpoint(endpoint, id);
+                }
+                this._handleCheckedCallback({
+                    name: "onSubmit",
+                    callback: qq.bind(this._options.callbacks.onSubmit, this, id, name),
+                    onSuccess: qq.bind(this._onSubmitCallbackSuccess, this, id, name),
+                    onFailure: qq.bind(this._fileOrBlobRejected, this, id, name),
+                    identifier: id
+                });
+            },
+            _uploadFile: function(id) {
+                if (!this._handler.upload(id)) {
+                    this._uploadData.setStatus(id, qq.status.QUEUED);
+                }
+            },
+            _uploadStoredFiles: function() {
+                var idToUpload, stillSubmitting, self = this;
+                while (this._storedIds.length) {
+                    idToUpload = this._storedIds.shift();
+                    this._uploadFile(idToUpload);
+                }
+                stillSubmitting = this.getUploads({
+                    status: qq.status.SUBMITTING
+                }).length;
+                if (stillSubmitting) {
+                    qq.log("Still waiting for " + stillSubmitting + " files to clear submit queue. Will re-parse stored IDs array shortly.");
+                    setTimeout(function() {
+                        self._uploadStoredFiles();
+                    }, 1e3);
+                }
+            },
+            _validateFileOrBlobData: function(fileWrapper, validationDescriptor) {
+                var self = this, file = function() {
+                    if (fileWrapper.file instanceof qq.BlobProxy) {
+                        return fileWrapper.file.referenceBlob;
+                    }
+                    return fileWrapper.file;
+                }(), name = validationDescriptor.name, size = validationDescriptor.size, buttonId = this._getButtonId(fileWrapper.file), validationBase = this._getValidationBase(buttonId), validityChecker = new qq.Promise();
+                validityChecker.then(function() {}, function() {
+                    self._fileOrBlobRejected(fileWrapper.id, name);
+                });
+                if (qq.isFileOrInput(file) && !this._isAllowedExtension(validationBase.allowedExtensions, name)) {
+                    this._itemError("typeError", name, file);
+                    return validityChecker.failure();
+                }
+                if (!this._options.validation.allowEmpty && size === 0) {
+                    this._itemError("emptyError", name, file);
+                    return validityChecker.failure();
+                }
+                if (size > 0 && validationBase.sizeLimit && size > validationBase.sizeLimit) {
+                    this._itemError("sizeError", name, file);
+                    return validityChecker.failure();
+                }
+                if (size > 0 && size < validationBase.minSizeLimit) {
+                    this._itemError("minSizeError", name, file);
+                    return validityChecker.failure();
+                }
+                if (qq.ImageValidation && qq.supportedFeatures.imagePreviews && qq.isFile(file)) {
+                    new qq.ImageValidation(file, qq.bind(self.log, self)).validate(validationBase.image).then(validityChecker.success, function(errorCode) {
+                        self._itemError(errorCode + "ImageError", name, file);
+                        validityChecker.failure();
+                    });
+                } else {
+                    validityChecker.success();
+                }
+                return validityChecker;
+            },
+            _wrapCallbacks: function() {
+                var self, safeCallback, prop;
+                self = this;
+                safeCallback = function(name, callback, args) {
+                    var errorMsg;
+                    try {
+                        return callback.apply(self, args);
+                    } catch (exception) {
+                        errorMsg = exception.message || exception.toString();
+                        self.log("Caught exception in '" + name + "' callback - " + errorMsg, "error");
+                    }
+                };
+                for (prop in this._options.callbacks) {
+                    (function() {
+                        var callbackName, callbackFunc;
+                        callbackName = prop;
+                        callbackFunc = self._options.callbacks[callbackName];
+                        self._options.callbacks[callbackName] = function() {
+                            return safeCallback(callbackName, callbackFunc, arguments);
+                        };
+                    })();
+                }
+            }
+        };
+    })();
+    (function() {
+        "use strict";
+        qq.FineUploaderBasic = function(o) {
+            var self = this;
+            this._options = {
+                debug: false,
+                button: null,
+                multiple: true,
+                maxConnections: 3,
+                disableCancelForFormUploads: false,
+                autoUpload: true,
+                request: {
+                    customHeaders: {},
+                    endpoint: "/server/upload",
+                    filenameParam: "qqfilename",
+                    forceMultipart: true,
+                    inputName: "qqfile",
+                    method: "POST",
+                    params: {},
+                    paramsInBody: true,
+                    totalFileSizeName: "qqtotalfilesize",
+                    uuidName: "qquuid"
+                },
+                validation: {
+                    allowedExtensions: [],
+                    sizeLimit: 0,
+                    minSizeLimit: 0,
+                    itemLimit: 0,
+                    stopOnFirstInvalidFile: true,
+                    acceptFiles: null,
+                    image: {
+                        maxHeight: 0,
+                        maxWidth: 0,
+                        minHeight: 0,
+                        minWidth: 0
+                    },
+                    allowEmpty: false
+                },
+                callbacks: {
+                    onSubmit: function(id, name) {},
+                    onSubmitted: function(id, name) {},
+                    onComplete: function(id, name, responseJSON, maybeXhr) {},
+                    onAllComplete: function(successful, failed) {},
+                    onCancel: function(id, name) {},
+                    onUpload: function(id, name) {},
+                    onUploadChunk: function(id, name, chunkData) {},
+                    onUploadChunkSuccess: function(id, chunkData, responseJSON, xhr) {},
+                    onResume: function(id, fileName, chunkData) {},
+                    onProgress: function(id, name, loaded, total) {},
+                    onTotalProgress: function(loaded, total) {},
+                    onError: function(id, name, reason, maybeXhrOrXdr) {},
+                    onAutoRetry: function(id, name, attemptNumber) {},
+                    onManualRetry: function(id, name) {},
+                    onValidateBatch: function(fileOrBlobData) {},
+                    onValidate: function(fileOrBlobData) {},
+                    onSubmitDelete: function(id) {},
+                    onDelete: function(id) {},
+                    onDeleteComplete: function(id, xhrOrXdr, isError) {},
+                    onPasteReceived: function(blob) {},
+                    onStatusChange: function(id, oldStatus, newStatus) {},
+                    onSessionRequestComplete: function(response, success, xhrOrXdr) {}
+                },
+                messages: {
+                    typeError: "{file} has an invalid extension. Valid extension(s): {extensions}.",
+                    sizeError: "{file} is too large, maximum file size is {sizeLimit}.",
+                    minSizeError: "{file} is too small, minimum file size is {minSizeLimit}.",
+                    emptyError: "{file} is empty, please select files again without it.",
+                    noFilesError: "No files to upload.",
+                    tooManyItemsError: "Too many items ({netItems}) would be uploaded.  Item limit is {itemLimit}.",
+                    maxHeightImageError: "Image is too tall.",
+                    maxWidthImageError: "Image is too wide.",
+                    minHeightImageError: "Image is not tall enough.",
+                    minWidthImageError: "Image is not wide enough.",
+                    retryFailTooManyItems: "Retry failed - you have reached your file limit.",
+                    onLeave: "The files are being uploaded, if you leave now the upload will be canceled.",
+                    unsupportedBrowserIos8Safari: "Unrecoverable error - this browser does not permit file uploading of any kind due to serious bugs in iOS8 Safari.  Please use iOS8 Chrome until Apple fixes these issues."
+                },
+                retry: {
+                    enableAuto: false,
+                    maxAutoAttempts: 3,
+                    autoAttemptDelay: 5,
+                    preventRetryResponseProperty: "preventRetry"
+                },
+                classes: {
+                    buttonHover: "qq-upload-button-hover",
+                    buttonFocus: "qq-upload-button-focus"
+                },
+                chunking: {
+                    enabled: false,
+                    concurrent: {
+                        enabled: false
+                    },
+                    mandatory: false,
+                    paramNames: {
+                        partIndex: "qqpartindex",
+                        partByteOffset: "qqpartbyteoffset",
+                        chunkSize: "qqchunksize",
+                        totalFileSize: "qqtotalfilesize",
+                        totalParts: "qqtotalparts"
+                    },
+                    partSize: 2e6,
+                    success: {
+                        endpoint: null
+                    }
+                },
+                resume: {
+                    enabled: false,
+                    recordsExpireIn: 7,
+                    paramNames: {
+                        resuming: "qqresume"
+                    }
+                },
+                formatFileName: function(fileOrBlobName) {
+                    return fileOrBlobName;
+                },
+                text: {
+                    defaultResponseError: "Upload failure reason unknown",
+                    fileInputTitle: "file input",
+                    sizeSymbols: [ "kB", "MB", "GB", "TB", "PB", "EB" ]
+                },
+                deleteFile: {
+                    enabled: false,
+                    method: "DELETE",
+                    endpoint: "/server/upload",
+                    customHeaders: {},
+                    params: {}
+                },
+                cors: {
+                    expected: false,
+                    sendCredentials: false,
+                    allowXdr: false
+                },
+                blobs: {
+                    defaultName: "misc_data"
+                },
+                paste: {
+                    targetElement: null,
+                    defaultName: "pasted_image"
+                },
+                camera: {
+                    ios: false,
+                    button: null
+                },
+                extraButtons: [],
+                session: {
+                    endpoint: null,
+                    params: {},
+                    customHeaders: {},
+                    refreshOnReset: true
+                },
+                form: {
+                    element: "qq-form",
+                    autoUpload: false,
+                    interceptSubmit: true
+                },
+                scaling: {
+                    customResizer: null,
+                    sendOriginal: true,
+                    orient: true,
+                    defaultType: null,
+                    defaultQuality: 80,
+                    failureText: "Failed to scale",
+                    includeExif: false,
+                    sizes: []
+                },
+                workarounds: {
+                    iosEmptyVideos: true,
+                    ios8SafariUploads: true,
+                    ios8BrowserCrash: false
+                }
+            };
+            qq.extend(this._options, o, true);
+            this._buttons = [];
+            this._extraButtonSpecs = {};
+            this._buttonIdsForFileIds = [];
+            this._wrapCallbacks();
+            this._disposeSupport = new qq.DisposeSupport();
+            this._storedIds = [];
+            this._autoRetries = [];
+            this._retryTimeouts = [];
+            this._preventRetries = [];
+            this._thumbnailUrls = [];
+            this._netUploadedOrQueued = 0;
+            this._netUploaded = 0;
+            this._uploadData = this._createUploadDataTracker();
+            this._initFormSupportAndParams();
+            this._customHeadersStore = this._createStore(this._options.request.customHeaders);
+            this._deleteFileCustomHeadersStore = this._createStore(this._options.deleteFile.customHeaders);
+            this._deleteFileParamsStore = this._createStore(this._options.deleteFile.params);
+            this._endpointStore = this._createStore(this._options.request.endpoint);
+            this._deleteFileEndpointStore = this._createStore(this._options.deleteFile.endpoint);
+            this._handler = this._createUploadHandler();
+            this._deleteHandler = qq.DeleteFileAjaxRequester && this._createDeleteHandler();
+            if (this._options.button) {
+                this._defaultButtonId = this._createUploadButton({
+                    element: this._options.button,
+                    title: this._options.text.fileInputTitle
+                }).getButtonId();
+            }
+            this._generateExtraButtonSpecs();
+            this._handleCameraAccess();
+            if (this._options.paste.targetElement) {
+                if (qq.PasteSupport) {
+                    this._pasteHandler = this._createPasteHandler();
+                } else {
+                    this.log("Paste support module not found", "error");
+                }
+            }
+            this._preventLeaveInProgress();
+            this._imageGenerator = qq.ImageGenerator && new qq.ImageGenerator(qq.bind(this.log, this));
+            this._refreshSessionData();
+            this._succeededSinceLastAllComplete = [];
+            this._failedSinceLastAllComplete = [];
+            this._scaler = qq.Scaler && new qq.Scaler(this._options.scaling, qq.bind(this.log, this)) || {};
+            if (this._scaler.enabled) {
+                this._customNewFileHandler = qq.bind(this._scaler.handleNewFile, this._scaler);
+            }
+            if (qq.TotalProgress && qq.supportedFeatures.progressBar) {
+                this._totalProgress = new qq.TotalProgress(qq.bind(this._onTotalProgress, this), function(id) {
+                    var entry = self._uploadData.retrieve({
+                        id: id
+                    });
+                    return entry && entry.size || 0;
+                });
+            }
+            this._currentItemLimit = this._options.validation.itemLimit;
+        };
+        qq.FineUploaderBasic.prototype = qq.basePublicApi;
+        qq.extend(qq.FineUploaderBasic.prototype, qq.basePrivateApi);
+    })();
+    qq.AjaxRequester = function(o) {
+        "use strict";
+        var log, shouldParamsBeInQueryString, queue = [], requestData = {}, options = {
+            acceptHeader: null,
+            validMethods: [ "PATCH", "POST", "PUT" ],
+            method: "POST",
+            contentType: "application/x-www-form-urlencoded",
+            maxConnections: 3,
+            customHeaders: {},
+            endpointStore: {},
+            paramsStore: {},
+            mandatedParams: {},
+            allowXRequestedWithAndCacheControl: true,
+            successfulResponseCodes: {
+                DELETE: [ 200, 202, 204 ],
+                PATCH: [ 200, 201, 202, 203, 204 ],
+                POST: [ 200, 201, 202, 203, 204 ],
+                PUT: [ 200, 201, 202, 203, 204 ],
+                GET: [ 200 ]
+            },
+            cors: {
+                expected: false,
+                sendCredentials: false
+            },
+            log: function(str, level) {},
+            onSend: function(id) {},
+            onComplete: function(id, xhrOrXdr, isError) {},
+            onProgress: null
+        };
+        qq.extend(options, o);
+        log = options.log;
+        if (qq.indexOf(options.validMethods, options.method) < 0) {
+            throw new Error("'" + options.method + "' is not a supported method for this type of request!");
+        }
+        function isSimpleMethod() {
+            return qq.indexOf([ "GET", "POST", "HEAD" ], options.method) >= 0;
+        }
+        function containsNonSimpleHeaders(headers) {
+            var containsNonSimple = false;
+            qq.each(containsNonSimple, function(idx, header) {
+                if (qq.indexOf([ "Accept", "Accept-Language", "Content-Language", "Content-Type" ], header) < 0) {
+                    containsNonSimple = true;
+                    return false;
+                }
+            });
+            return containsNonSimple;
+        }
+        function isXdr(xhr) {
+            return options.cors.expected && xhr.withCredentials === undefined;
+        }
+        function getCorsAjaxTransport() {
+            var xhrOrXdr;
+            if (window.XMLHttpRequest || window.ActiveXObject) {
+                xhrOrXdr = qq.createXhrInstance();
+                if (xhrOrXdr.withCredentials === undefined) {
+                    xhrOrXdr = new XDomainRequest();
+                    xhrOrXdr.onload = function() {};
+                    xhrOrXdr.onerror = function() {};
+                    xhrOrXdr.ontimeout = function() {};
+                    xhrOrXdr.onprogress = function() {};
+                }
+            }
+            return xhrOrXdr;
+        }
+        function getXhrOrXdr(id, suppliedXhr) {
+            var xhrOrXdr = requestData[id].xhr;
+            if (!xhrOrXdr) {
+                if (suppliedXhr) {
+                    xhrOrXdr = suppliedXhr;
+                } else {
+                    if (options.cors.expected) {
+                        xhrOrXdr = getCorsAjaxTransport();
+                    } else {
+                        xhrOrXdr = qq.createXhrInstance();
+                    }
+                }
+                requestData[id].xhr = xhrOrXdr;
+            }
+            return xhrOrXdr;
+        }
+        function dequeue(id) {
+            var i = qq.indexOf(queue, id), max = options.maxConnections, nextId;
+            delete requestData[id];
+            queue.splice(i, 1);
+            if (queue.length >= max && i < max) {
+                nextId = queue[max - 1];
+                sendRequest(nextId);
+            }
+        }
+        function onComplete(id, xdrError) {
+            var xhr = getXhrOrXdr(id), method = options.method, isError = xdrError === true;
+            dequeue(id);
+            if (isError) {
+                log(method + " request for " + id + " has failed", "error");
+            } else if (!isXdr(xhr) && !isResponseSuccessful(xhr.status)) {
+                isError = true;
+                log(method + " request for " + id + " has failed - response code " + xhr.status, "error");
+            }
+            options.onComplete(id, xhr, isError);
+        }
+        function getParams(id) {
+            var onDemandParams = requestData[id].additionalParams, mandatedParams = options.mandatedParams, params;
+            if (options.paramsStore.get) {
+                params = options.paramsStore.get(id);
+            }
+            if (onDemandParams) {
+                qq.each(onDemandParams, function(name, val) {
+                    params = params || {};
+                    params[name] = val;
+                });
+            }
+            if (mandatedParams) {
+                qq.each(mandatedParams, function(name, val) {
+                    params = params || {};
+                    params[name] = val;
+                });
+            }
+            return params;
+        }
+        function sendRequest(id, optXhr) {
+            var xhr = getXhrOrXdr(id, optXhr), method = options.method, params = getParams(id), payload = requestData[id].payload, url;
+            options.onSend(id);
+            url = createUrl(id, params, requestData[id].additionalQueryParams);
+            if (isXdr(xhr)) {
+                xhr.onload = getXdrLoadHandler(id);
+                xhr.onerror = getXdrErrorHandler(id);
+            } else {
+                xhr.onreadystatechange = getXhrReadyStateChangeHandler(id);
+            }
+            registerForUploadProgress(id);
+            xhr.open(method, url, true);
+            if (options.cors.expected && options.cors.sendCredentials && !isXdr(xhr)) {
+                xhr.withCredentials = true;
+            }
+            setHeaders(id);
+            log("Sending " + method + " request for " + id);
+            if (payload) {
+                xhr.send(payload);
+            } else if (shouldParamsBeInQueryString || !params) {
+                xhr.send();
+            } else if (params && options.contentType && options.contentType.toLowerCase().indexOf("application/x-www-form-urlencoded") >= 0) {
+                xhr.send(qq.obj2url(params, ""));
+            } else if (params && options.contentType && options.contentType.toLowerCase().indexOf("application/json") >= 0) {
+                xhr.send(JSON.stringify(params));
+            } else {
+                xhr.send(params);
+            }
+            return xhr;
+        }
+        function createUrl(id, params, additionalQueryParams) {
+            var endpoint = options.endpointStore.get(id), addToPath = requestData[id].addToPath;
+            if (addToPath != undefined) {
+                endpoint += "/" + addToPath;
+            }
+            if (shouldParamsBeInQueryString && params) {
+                endpoint = qq.obj2url(params, endpoint);
+            }
+            if (additionalQueryParams) {
+                endpoint = qq.obj2url(additionalQueryParams, endpoint);
+            }
+            return endpoint;
+        }
+        function getXhrReadyStateChangeHandler(id) {
+            return function() {
+                if (getXhrOrXdr(id).readyState === 4) {
+                    onComplete(id);
+                }
+            };
+        }
+        function registerForUploadProgress(id) {
+            var onProgress = options.onProgress;
+            if (onProgress) {
+                getXhrOrXdr(id).upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        onProgress(id, e.loaded, e.total);
+                    }
+                };
+            }
+        }
+        function getXdrLoadHandler(id) {
+            return function() {
+                onComplete(id);
+            };
+        }
+        function getXdrErrorHandler(id) {
+            return function() {
+                onComplete(id, true);
+            };
+        }
+        function setHeaders(id) {
+            var xhr = getXhrOrXdr(id), customHeaders = options.customHeaders, onDemandHeaders = requestData[id].additionalHeaders || {}, method = options.method, allHeaders = {};
+            if (!isXdr(xhr)) {
+                options.acceptHeader && xhr.setRequestHeader("Accept", options.acceptHeader);
+                if (options.allowXRequestedWithAndCacheControl) {
+                    if (!options.cors.expected || (!isSimpleMethod() || containsNonSimpleHeaders(customHeaders))) {
+                        xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+                        xhr.setRequestHeader("Cache-Control", "no-cache");
+                    }
+                }
+                if (options.contentType && (method === "POST" || method === "PUT")) {
+                    xhr.setRequestHeader("Content-Type", options.contentType);
+                }
+                qq.extend(allHeaders, qq.isFunction(customHeaders) ? customHeaders(id) : customHeaders);
+                qq.extend(allHeaders, onDemandHeaders);
+                qq.each(allHeaders, function(name, val) {
+                    xhr.setRequestHeader(name, val);
+                });
+            }
+        }
+        function isResponseSuccessful(responseCode) {
+            return qq.indexOf(options.successfulResponseCodes[options.method], responseCode) >= 0;
+        }
+        function prepareToSend(id, optXhr, addToPath, additionalParams, additionalQueryParams, additionalHeaders, payload) {
+            requestData[id] = {
+                addToPath: addToPath,
+                additionalParams: additionalParams,
+                additionalQueryParams: additionalQueryParams,
+                additionalHeaders: additionalHeaders,
+                payload: payload
+            };
+            var len = queue.push(id);
+            if (len <= options.maxConnections) {
+                return sendRequest(id, optXhr);
+            }
+        }
+        shouldParamsBeInQueryString = options.method === "GET" || options.method === "DELETE";
+        qq.extend(this, {
+            initTransport: function(id) {
+                var path, params, headers, payload, cacheBuster, additionalQueryParams;
+                return {
+                    withPath: function(appendToPath) {
+                        path = appendToPath;
+                        return this;
+                    },
+                    withParams: function(additionalParams) {
+                        params = additionalParams;
+                        return this;
+                    },
+                    withQueryParams: function(_additionalQueryParams_) {
+                        additionalQueryParams = _additionalQueryParams_;
+                        return this;
+                    },
+                    withHeaders: function(additionalHeaders) {
+                        headers = additionalHeaders;
+                        return this;
+                    },
+                    withPayload: function(thePayload) {
+                        payload = thePayload;
+                        return this;
+                    },
+                    withCacheBuster: function() {
+                        cacheBuster = true;
+                        return this;
+                    },
+                    send: function(optXhr) {
+                        if (cacheBuster && qq.indexOf([ "GET", "DELETE" ], options.method) >= 0) {
+                            params.qqtimestamp = new Date().getTime();
+                        }
+                        return prepareToSend(id, optXhr, path, params, additionalQueryParams, headers, payload);
+                    }
+                };
+            },
+            canceled: function(id) {
+                dequeue(id);
+            }
+        });
+    };
+    qq.UploadHandler = function(spec) {
+        "use strict";
+        var proxy = spec.proxy, fileState = {}, onCancel = proxy.onCancel, getName = proxy.getName;
+        qq.extend(this, {
+            add: function(id, fileItem) {
+                fileState[id] = fileItem;
+                fileState[id].temp = {};
+            },
+            cancel: function(id) {
+                var self = this, cancelFinalizationEffort = new qq.Promise(), onCancelRetVal = onCancel(id, getName(id), cancelFinalizationEffort);
+                onCancelRetVal.then(function() {
+                    if (self.isValid(id)) {
+                        fileState[id].canceled = true;
+                        self.expunge(id);
+                    }
+                    cancelFinalizationEffort.success();
+                });
+            },
+            expunge: function(id) {
+                delete fileState[id];
+            },
+            getThirdPartyFileId: function(id) {
+                return fileState[id].key;
+            },
+            isValid: function(id) {
+                return fileState[id] !== undefined;
+            },
+            reset: function() {
+                fileState = {};
+            },
+            _getFileState: function(id) {
+                return fileState[id];
+            },
+            _setThirdPartyFileId: function(id, thirdPartyFileId) {
+                fileState[id].key = thirdPartyFileId;
+            },
+            _wasCanceled: function(id) {
+                return !!fileState[id].canceled;
+            }
+        });
+    };
+    qq.UploadHandlerController = function(o, namespace) {
+        "use strict";
+        var controller = this, chunkingPossible = false, concurrentChunkingPossible = false, chunking, preventRetryResponse, log, handler, options = {
+            paramsStore: {},
+            maxConnections: 3,
+            chunking: {
+                enabled: false,
+                multiple: {
+                    enabled: false
+                }
+            },
+            log: function(str, level) {},
+            onProgress: function(id, fileName, loaded, total) {},
+            onComplete: function(id, fileName, response, xhr) {},
+            onCancel: function(id, fileName) {},
+            onUploadPrep: function(id) {},
+            onUpload: function(id, fileName) {},
+            onUploadChunk: function(id, fileName, chunkData) {},
+            onUploadChunkSuccess: function(id, chunkData, response, xhr) {},
+            onAutoRetry: function(id, fileName, response, xhr) {},
+            onResume: function(id, fileName, chunkData) {},
+            onUuidChanged: function(id, newUuid) {},
+            getName: function(id) {},
+            setSize: function(id, newSize) {},
+            isQueued: function(id) {},
+            getIdsInProxyGroup: function(id) {},
+            getIdsInBatch: function(id) {}
+        }, chunked = {
+            done: function(id, chunkIdx, response, xhr) {
+                var chunkData = handler._getChunkData(id, chunkIdx);
+                handler._getFileState(id).attemptingResume = false;
+                delete handler._getFileState(id).temp.chunkProgress[chunkIdx];
+                handler._getFileState(id).loaded += chunkData.size;
+                options.onUploadChunkSuccess(id, handler._getChunkDataForCallback(chunkData), response, xhr);
+            },
+            finalize: function(id) {
+                var size = options.getSize(id), name = options.getName(id);
+                log("All chunks have been uploaded for " + id + " - finalizing....");
+                handler.finalizeChunks(id).then(function(response, xhr) {
+                    log("Finalize successful for " + id);
+                    var normaizedResponse = upload.normalizeResponse(response, true);
+                    options.onProgress(id, name, size, size);
+                    handler._maybeDeletePersistedChunkData(id);
+                    upload.cleanup(id, normaizedResponse, xhr);
+                }, function(response, xhr) {
+                    var normaizedResponse = upload.normalizeResponse(response, false);
+                    log("Problem finalizing chunks for file ID " + id + " - " + normaizedResponse.error, "error");
+                    if (normaizedResponse.reset) {
+                        chunked.reset(id);
+                    }
+                    if (!options.onAutoRetry(id, name, normaizedResponse, xhr)) {
+                        upload.cleanup(id, normaizedResponse, xhr);
+                    }
+                });
+            },
+            handleFailure: function(chunkIdx, id, response, xhr) {
+                var name = options.getName(id);
+                log("Chunked upload request failed for " + id + ", chunk " + chunkIdx);
+                handler.clearCachedChunk(id, chunkIdx);
+                var responseToReport = upload.normalizeResponse(response, false), inProgressIdx;
+                if (responseToReport.reset) {
+                    chunked.reset(id);
+                } else {
+                    inProgressIdx = qq.indexOf(handler._getFileState(id).chunking.inProgress, chunkIdx);
+                    if (inProgressIdx >= 0) {
+                        handler._getFileState(id).chunking.inProgress.splice(inProgressIdx, 1);
+                        handler._getFileState(id).chunking.remaining.unshift(chunkIdx);
+                    }
+                }
+                if (!handler._getFileState(id).temp.ignoreFailure) {
+                    if (concurrentChunkingPossible) {
+                        handler._getFileState(id).temp.ignoreFailure = true;
+                        log(qq.format("Going to attempt to abort these chunks: {}. These are currently in-progress: {}.", JSON.stringify(Object.keys(handler._getXhrs(id))), JSON.stringify(handler._getFileState(id).chunking.inProgress)));
+                        qq.each(handler._getXhrs(id), function(ckid, ckXhr) {
+                            log(qq.format("Attempting to abort file {}.{}. XHR readyState {}. ", id, ckid, ckXhr.readyState));
+                            ckXhr.abort();
+                            ckXhr._cancelled = true;
+                        });
+                        handler.moveInProgressToRemaining(id);
+                        connectionManager.free(id, true);
+                    }
+                    if (!options.onAutoRetry(id, name, responseToReport, xhr)) {
+                        upload.cleanup(id, responseToReport, xhr);
+                    }
+                }
+            },
+            hasMoreParts: function(id) {
+                return !!handler._getFileState(id).chunking.remaining.length;
+            },
+            nextPart: function(id) {
+                var nextIdx = handler._getFileState(id).chunking.remaining.shift();
+                if (nextIdx >= handler._getTotalChunks(id)) {
+                    nextIdx = null;
+                }
+                return nextIdx;
+            },
+            reset: function(id) {
+                log("Server or callback has ordered chunking effort to be restarted on next attempt for item ID " + id, "error");
+                handler._maybeDeletePersistedChunkData(id);
+                handler.reevaluateChunking(id);
+                handler._getFileState(id).loaded = 0;
+            },
+            sendNext: function(id) {
+                var size = options.getSize(id), name = options.getName(id), chunkIdx = chunked.nextPart(id), chunkData = handler._getChunkData(id, chunkIdx), resuming = handler._getFileState(id).attemptingResume, inProgressChunks = handler._getFileState(id).chunking.inProgress || [];
+                if (handler._getFileState(id).loaded == null) {
+                    handler._getFileState(id).loaded = 0;
+                }
+                if (resuming && options.onResume(id, name, chunkData) === false) {
+                    chunked.reset(id);
+                    chunkIdx = chunked.nextPart(id);
+                    chunkData = handler._getChunkData(id, chunkIdx);
+                    resuming = false;
+                }
+                if (chunkIdx == null && inProgressChunks.length === 0) {
+                    chunked.finalize(id);
+                } else {
+                    log(qq.format("Sending chunked upload request for item {}.{}, bytes {}-{} of {}.", id, chunkIdx, chunkData.start + 1, chunkData.end, size));
+                    options.onUploadChunk(id, name, handler._getChunkDataForCallback(chunkData));
+                    inProgressChunks.push(chunkIdx);
+                    handler._getFileState(id).chunking.inProgress = inProgressChunks;
+                    if (concurrentChunkingPossible) {
+                        connectionManager.open(id, chunkIdx);
+                    }
+                    if (concurrentChunkingPossible && connectionManager.available() && handler._getFileState(id).chunking.remaining.length) {
+                        chunked.sendNext(id);
+                    }
+                    if (chunkData.blob.size === 0) {
+                        log(qq.format("Chunk {} for file {} will not be uploaded, zero sized chunk.", chunkIdx, id), "error");
+                        chunked.handleFailure(chunkIdx, id, "File is no longer available", null);
+                    } else {
+                        handler.uploadChunk(id, chunkIdx, resuming).then(function success(response, xhr) {
+                            log("Chunked upload request succeeded for " + id + ", chunk " + chunkIdx);
+                            handler.clearCachedChunk(id, chunkIdx);
+                            var inProgressChunks = handler._getFileState(id).chunking.inProgress || [], responseToReport = upload.normalizeResponse(response, true), inProgressChunkIdx = qq.indexOf(inProgressChunks, chunkIdx);
+                            log(qq.format("Chunk {} for file {} uploaded successfully.", chunkIdx, id));
+                            chunked.done(id, chunkIdx, responseToReport, xhr);
+                            if (inProgressChunkIdx >= 0) {
+                                inProgressChunks.splice(inProgressChunkIdx, 1);
+                            }
+                            handler._maybePersistChunkedState(id);
+                            if (!chunked.hasMoreParts(id) && inProgressChunks.length === 0) {
+                                chunked.finalize(id);
+                            } else if (chunked.hasMoreParts(id)) {
+                                chunked.sendNext(id);
+                            } else {
+                                log(qq.format("File ID {} has no more chunks to send and these chunk indexes are still marked as in-progress: {}", id, JSON.stringify(inProgressChunks)));
+                            }
+                        }, function failure(response, xhr) {
+                            chunked.handleFailure(chunkIdx, id, response, xhr);
+                        }).done(function() {
+                            handler.clearXhr(id, chunkIdx);
+                        });
+                    }
+                }
+            }
+        }, connectionManager = {
+            _open: [],
+            _openChunks: {},
+            _waiting: [],
+            available: function() {
+                var max = options.maxConnections, openChunkEntriesCount = 0, openChunksCount = 0;
+                qq.each(connectionManager._openChunks, function(fileId, openChunkIndexes) {
+                    openChunkEntriesCount++;
+                    openChunksCount += openChunkIndexes.length;
+                });
+                return max - (connectionManager._open.length - openChunkEntriesCount + openChunksCount);
+            },
+            free: function(id, dontAllowNext) {
+                var allowNext = !dontAllowNext, waitingIndex = qq.indexOf(connectionManager._waiting, id), connectionsIndex = qq.indexOf(connectionManager._open, id), nextId;
+                delete connectionManager._openChunks[id];
+                if (upload.getProxyOrBlob(id) instanceof qq.BlobProxy) {
+                    log("Generated blob upload has ended for " + id + ", disposing generated blob.");
+                    delete handler._getFileState(id).file;
+                }
+                if (waitingIndex >= 0) {
+                    connectionManager._waiting.splice(waitingIndex, 1);
+                } else if (allowNext && connectionsIndex >= 0) {
+                    connectionManager._open.splice(connectionsIndex, 1);
+                    nextId = connectionManager._waiting.shift();
+                    if (nextId >= 0) {
+                        connectionManager._open.push(nextId);
+                        upload.start(nextId);
+                    }
+                }
+            },
+            getWaitingOrConnected: function() {
+                var waitingOrConnected = [];
+                qq.each(connectionManager._openChunks, function(fileId, chunks) {
+                    if (chunks && chunks.length) {
+                        waitingOrConnected.push(parseInt(fileId));
+                    }
+                });
+                qq.each(connectionManager._open, function(idx, fileId) {
+                    if (!connectionManager._openChunks[fileId]) {
+                        waitingOrConnected.push(parseInt(fileId));
+                    }
+                });
+                waitingOrConnected = waitingOrConnected.concat(connectionManager._waiting);
+                return waitingOrConnected;
+            },
+            isUsingConnection: function(id) {
+                return qq.indexOf(connectionManager._open, id) >= 0;
+            },
+            open: function(id, chunkIdx) {
+                if (chunkIdx == null) {
+                    connectionManager._waiting.push(id);
+                }
+                if (connectionManager.available()) {
+                    if (chunkIdx == null) {
+                        connectionManager._waiting.pop();
+                        connectionManager._open.push(id);
+                    } else {
+                        (function() {
+                            var openChunksEntry = connectionManager._openChunks[id] || [];
+                            openChunksEntry.push(chunkIdx);
+                            connectionManager._openChunks[id] = openChunksEntry;
+                        })();
+                    }
+                    return true;
+                }
+                return false;
+            },
+            reset: function() {
+                connectionManager._waiting = [];
+                connectionManager._open = [];
+            }
+        }, simple = {
+            send: function(id, name) {
+                handler._getFileState(id).loaded = 0;
+                log("Sending simple upload request for " + id);
+                handler.uploadFile(id).then(function(response, optXhr) {
+                    log("Simple upload request succeeded for " + id);
+                    var responseToReport = upload.normalizeResponse(response, true), size = options.getSize(id);
+                    options.onProgress(id, name, size, size);
+                    upload.maybeNewUuid(id, responseToReport);
+                    upload.cleanup(id, responseToReport, optXhr);
+                }, function(response, optXhr) {
+                    log("Simple upload request failed for " + id);
+                    var responseToReport = upload.normalizeResponse(response, false);
+                    if (!options.onAutoRetry(id, name, responseToReport, optXhr)) {
+                        upload.cleanup(id, responseToReport, optXhr);
+                    }
+                });
+            }
+        }, upload = {
+            cancel: function(id) {
+                log("Cancelling " + id);
+                options.paramsStore.remove(id);
+                connectionManager.free(id);
+            },
+            cleanup: function(id, response, optXhr) {
+                var name = options.getName(id);
+                options.onComplete(id, name, response, optXhr);
+                if (handler._getFileState(id)) {
+                    handler._clearXhrs && handler._clearXhrs(id);
+                }
+                connectionManager.free(id);
+            },
+            getProxyOrBlob: function(id) {
+                return handler.getProxy && handler.getProxy(id) || handler.getFile && handler.getFile(id);
+            },
+            initHandler: function() {
+                var handlerType = namespace ? qq[namespace] : qq.traditional, handlerModuleSubtype = qq.supportedFeatures.ajaxUploading ? "Xhr" : "Form";
+                handler = new handlerType[handlerModuleSubtype + "UploadHandler"](options, {
+                    getDataByUuid: options.getDataByUuid,
+                    getName: options.getName,
+                    getSize: options.getSize,
+                    getUuid: options.getUuid,
+                    log: log,
+                    onCancel: options.onCancel,
+                    onProgress: options.onProgress,
+                    onUuidChanged: options.onUuidChanged
+                });
+                if (handler._removeExpiredChunkingRecords) {
+                    handler._removeExpiredChunkingRecords();
+                }
+            },
+            isDeferredEligibleForUpload: function(id) {
+                return options.isQueued(id);
+            },
+            maybeDefer: function(id, blob) {
+                if (blob && !handler.getFile(id) && blob instanceof qq.BlobProxy) {
+                    options.onUploadPrep(id);
+                    log("Attempting to generate a blob on-demand for " + id);
+                    blob.create().then(function(generatedBlob) {
+                        log("Generated an on-demand blob for " + id);
+                        handler.updateBlob(id, generatedBlob);
+                        options.setSize(id, generatedBlob.size);
+                        handler.reevaluateChunking(id);
+                        upload.maybeSendDeferredFiles(id);
+                    }, function(errorMessage) {
+                        var errorResponse = {};
+                        if (errorMessage) {
+                            errorResponse.error = errorMessage;
+                        }
+                        log(qq.format("Failed to generate blob for ID {}.  Error message: {}.", id, errorMessage), "error");
+                        options.onComplete(id, options.getName(id), qq.extend(errorResponse, preventRetryResponse), null);
+                        upload.maybeSendDeferredFiles(id);
+                        connectionManager.free(id);
+                    });
+                } else {
+                    return upload.maybeSendDeferredFiles(id);
+                }
+                return false;
+            },
+            maybeSendDeferredFiles: function(id) {
+                var idsInGroup = options.getIdsInProxyGroup(id), uploadedThisId = false;
+                if (idsInGroup && idsInGroup.length) {
+                    log("Maybe ready to upload proxy group file " + id);
+                    qq.each(idsInGroup, function(idx, idInGroup) {
+                        if (upload.isDeferredEligibleForUpload(idInGroup) && !!handler.getFile(idInGroup)) {
+                            uploadedThisId = idInGroup === id;
+                            upload.now(idInGroup);
+                        } else if (upload.isDeferredEligibleForUpload(idInGroup)) {
+                            return false;
+                        }
+                    });
+                } else {
+                    uploadedThisId = true;
+                    upload.now(id);
+                }
+                return uploadedThisId;
+            },
+            maybeNewUuid: function(id, response) {
+                if (response.newUuid !== undefined) {
+                    options.onUuidChanged(id, response.newUuid);
+                }
+            },
+            normalizeResponse: function(originalResponse, successful) {
+                var response = originalResponse;
+                if (!qq.isObject(originalResponse)) {
+                    response = {};
+                    if (qq.isString(originalResponse) && !successful) {
+                        response.error = originalResponse;
+                    }
+                }
+                response.success = successful;
+                return response;
+            },
+            now: function(id) {
+                var name = options.getName(id);
+                if (!controller.isValid(id)) {
+                    throw new qq.Error(id + " is not a valid file ID to upload!");
+                }
+                options.onUpload(id, name);
+                if (chunkingPossible && handler._shouldChunkThisFile(id)) {
+                    chunked.sendNext(id);
+                } else {
+                    simple.send(id, name);
+                }
+            },
+            start: function(id) {
+                var blobToUpload = upload.getProxyOrBlob(id);
+                if (blobToUpload) {
+                    return upload.maybeDefer(id, blobToUpload);
+                } else {
+                    upload.now(id);
+                    return true;
+                }
+            }
+        };
+        qq.extend(this, {
+            add: function(id, file) {
+                handler.add.apply(this, arguments);
+            },
+            upload: function(id) {
+                if (connectionManager.open(id)) {
+                    return upload.start(id);
+                }
+                return false;
+            },
+            retry: function(id) {
+                if (concurrentChunkingPossible) {
+                    handler._getFileState(id).temp.ignoreFailure = false;
+                }
+                if (connectionManager.isUsingConnection(id)) {
+                    return upload.start(id);
+                } else {
+                    return controller.upload(id);
+                }
+            },
+            cancel: function(id) {
+                var cancelRetVal = handler.cancel(id);
+                if (qq.isGenericPromise(cancelRetVal)) {
+                    cancelRetVal.then(function() {
+                        upload.cancel(id);
+                    });
+                } else if (cancelRetVal !== false) {
+                    upload.cancel(id);
+                }
+            },
+            cancelAll: function() {
+                var waitingOrConnected = connectionManager.getWaitingOrConnected(), i;
+                if (waitingOrConnected.length) {
+                    for (i = waitingOrConnected.length - 1; i >= 0; i--) {
+                        controller.cancel(waitingOrConnected[i]);
+                    }
+                }
+                connectionManager.reset();
+            },
+            getFile: function(id) {
+                if (handler.getProxy && handler.getProxy(id)) {
+                    return handler.getProxy(id).referenceBlob;
+                }
+                return handler.getFile && handler.getFile(id);
+            },
+            isProxied: function(id) {
+                return !!(handler.getProxy && handler.getProxy(id));
+            },
+            getInput: function(id) {
+                if (handler.getInput) {
+                    return handler.getInput(id);
+                }
+            },
+            reset: function() {
+                log("Resetting upload handler");
+                controller.cancelAll();
+                connectionManager.reset();
+                handler.reset();
+            },
+            expunge: function(id) {
+                if (controller.isValid(id)) {
+                    return handler.expunge(id);
+                }
+            },
+            isValid: function(id) {
+                return handler.isValid(id);
+            },
+            getResumableFilesData: function() {
+                if (handler.getResumableFilesData) {
+                    return handler.getResumableFilesData();
+                }
+                return [];
+            },
+            getThirdPartyFileId: function(id) {
+                if (controller.isValid(id)) {
+                    return handler.getThirdPartyFileId(id);
+                }
+            },
+            pause: function(id) {
+                if (controller.isResumable(id) && handler.pause && controller.isValid(id) && handler.pause(id)) {
+                    connectionManager.free(id);
+                    handler.moveInProgressToRemaining(id);
+                    return true;
+                }
+                return false;
+            },
+            isResumable: function(id) {
+                return !!handler.isResumable && handler.isResumable(id);
+            }
+        });
+        qq.extend(options, o);
+        log = options.log;
+        chunkingPossible = options.chunking.enabled && qq.supportedFeatures.chunking;
+        concurrentChunkingPossible = chunkingPossible && options.chunking.concurrent.enabled;
+        preventRetryResponse = function() {
+            var response = {};
+            response[options.preventRetryParam] = true;
+            return response;
+        }();
+        upload.initHandler();
+    };
+    qq.WindowReceiveMessage = function(o) {
+        "use strict";
+        var options = {
+            log: function(message, level) {}
+        }, callbackWrapperDetachers = {};
+        qq.extend(options, o);
+        qq.extend(this, {
+            receiveMessage: function(id, callback) {
+                var onMessageCallbackWrapper = function(event) {
+                    callback(event.data);
+                };
+                if (window.postMessage) {
+                    callbackWrapperDetachers[id] = qq(window).attach("message", onMessageCallbackWrapper);
+                } else {
+                    log("iframe message passing not supported in this browser!", "error");
+                }
+            },
+            stopReceivingMessages: function(id) {
+                if (window.postMessage) {
+                    var detacher = callbackWrapperDetachers[id];
+                    if (detacher) {
+                        detacher();
+                    }
+                }
+            }
+        });
+    };
+    qq.FormUploadHandler = function(spec) {
+        "use strict";
+        var options = spec.options, handler = this, proxy = spec.proxy, formHandlerInstanceId = qq.getUniqueId(), onloadCallbacks = {}, detachLoadEvents = {}, postMessageCallbackTimers = {}, isCors = options.isCors, inputName = options.inputName, getUuid = proxy.getUuid, log = proxy.log, corsMessageReceiver = new qq.WindowReceiveMessage({
+            log: log
+        });
+        function expungeFile(id) {
+            delete detachLoadEvents[id];
+            if (isCors) {
+                clearTimeout(postMessageCallbackTimers[id]);
+                delete postMessageCallbackTimers[id];
+                corsMessageReceiver.stopReceivingMessages(id);
+            }
+            var iframe = document.getElementById(handler._getIframeName(id));
+            if (iframe) {
+                iframe.setAttribute("src", "javascript:false;");
+                qq(iframe).remove();
+            }
+        }
+        function getFileIdForIframeName(iframeName) {
+            return iframeName.split("_")[0];
+        }
+        function initIframeForUpload(name) {
+            var iframe = qq.toElement("<iframe src='javascript:false;' name='" + name + "' />");
+            iframe.setAttribute("id", name);
+            iframe.style.display = "none";
+            document.body.appendChild(iframe);
+            return iframe;
+        }
+        function registerPostMessageCallback(iframe, callback) {
+            var iframeName = iframe.id, fileId = getFileIdForIframeName(iframeName), uuid = getUuid(fileId);
+            onloadCallbacks[uuid] = callback;
+            detachLoadEvents[fileId] = qq(iframe).attach("load", function() {
+                if (handler.getInput(fileId)) {
+                    log("Received iframe load event for CORS upload request (iframe name " + iframeName + ")");
+                    postMessageCallbackTimers[iframeName] = setTimeout(function() {
+                        var errorMessage = "No valid message received from loaded iframe for iframe name " + iframeName;
+                        log(errorMessage, "error");
+                        callback({
+                            error: errorMessage
+                        });
+                    }, 1e3);
+                }
+            });
+            corsMessageReceiver.receiveMessage(iframeName, function(message) {
+                log("Received the following window message: '" + message + "'");
+                var fileId = getFileIdForIframeName(iframeName), response = handler._parseJsonResponse(message), uuid = response.uuid, onloadCallback;
+                if (uuid && onloadCallbacks[uuid]) {
+                    log("Handling response for iframe name " + iframeName);
+                    clearTimeout(postMessageCallbackTimers[iframeName]);
+                    delete postMessageCallbackTimers[iframeName];
+                    handler._detachLoadEvent(iframeName);
+                    onloadCallback = onloadCallbacks[uuid];
+                    delete onloadCallbacks[uuid];
+                    corsMessageReceiver.stopReceivingMessages(iframeName);
+                    onloadCallback(response);
+                } else if (!uuid) {
+                    log("'" + message + "' does not contain a UUID - ignoring.");
+                }
+            });
+        }
+        qq.extend(this, new qq.UploadHandler(spec));
+        qq.override(this, function(super_) {
+            return {
+                add: function(id, fileInput) {
+                    super_.add(id, {
+                        input: fileInput
+                    });
+                    fileInput.setAttribute("name", inputName);
+                    if (fileInput.parentNode) {
+                        qq(fileInput).remove();
+                    }
+                },
+                expunge: function(id) {
+                    expungeFile(id);
+                    super_.expunge(id);
+                },
+                isValid: function(id) {
+                    return super_.isValid(id) && handler._getFileState(id).input !== undefined;
+                }
+            };
+        });
+        qq.extend(this, {
+            getInput: function(id) {
+                return handler._getFileState(id).input;
+            },
+            _attachLoadEvent: function(iframe, callback) {
+                var responseDescriptor;
+                if (isCors) {
+                    registerPostMessageCallback(iframe, callback);
+                } else {
+                    detachLoadEvents[iframe.id] = qq(iframe).attach("load", function() {
+                        log("Received response for " + iframe.id);
+                        if (!iframe.parentNode) {
+                            return;
+                        }
+                        try {
+                            if (iframe.contentDocument && iframe.contentDocument.body && iframe.contentDocument.body.innerHTML == "false") {
+                                return;
+                            }
+                        } catch (error) {
+                            log("Error when attempting to access iframe during handling of upload response (" + error.message + ")", "error");
+                            responseDescriptor = {
+                                success: false
+                            };
+                        }
+                        callback(responseDescriptor);
+                    });
+                }
+            },
+            _createIframe: function(id) {
+                var iframeName = handler._getIframeName(id);
+                return initIframeForUpload(iframeName);
+            },
+            _detachLoadEvent: function(id) {
+                if (detachLoadEvents[id] !== undefined) {
+                    detachLoadEvents[id]();
+                    delete detachLoadEvents[id];
+                }
+            },
+            _getIframeName: function(fileId) {
+                return fileId + "_" + formHandlerInstanceId;
+            },
+            _initFormForUpload: function(spec) {
+                var method = spec.method, endpoint = spec.endpoint, params = spec.params, paramsInBody = spec.paramsInBody, targetName = spec.targetName, form = qq.toElement("<form method='" + method + "' enctype='multipart/form-data'></form>"), url = endpoint;
+                if (paramsInBody) {
+                    qq.obj2Inputs(params, form);
+                } else {
+                    url = qq.obj2url(params, endpoint);
+                }
+                form.setAttribute("action", url);
+                form.setAttribute("target", targetName);
+                form.style.display = "none";
+                document.body.appendChild(form);
+                return form;
+            },
+            _parseJsonResponse: function(innerHtmlOrMessage) {
+                var response = {};
+                try {
+                    response = qq.parseJson(innerHtmlOrMessage);
+                } catch (error) {
+                    log("Error when attempting to parse iframe upload response (" + error.message + ")", "error");
+                }
+                return response;
+            }
+        });
+    };
+    qq.XhrUploadHandler = function(spec) {
+        "use strict";
+        var handler = this, namespace = spec.options.namespace, proxy = spec.proxy, chunking = spec.options.chunking, resume = spec.options.resume, chunkFiles = chunking && spec.options.chunking.enabled && qq.supportedFeatures.chunking, resumeEnabled = resume && spec.options.resume.enabled && chunkFiles && qq.supportedFeatures.resume, getName = proxy.getName, getSize = proxy.getSize, getUuid = proxy.getUuid, getEndpoint = proxy.getEndpoint, getDataByUuid = proxy.getDataByUuid, onUuidChanged = proxy.onUuidChanged, onProgress = proxy.onProgress, log = proxy.log;
+        function abort(id) {
+            qq.each(handler._getXhrs(id), function(xhrId, xhr) {
+                var ajaxRequester = handler._getAjaxRequester(id, xhrId);
+                xhr.onreadystatechange = null;
+                xhr.upload.onprogress = null;
+                xhr.abort();
+                ajaxRequester && ajaxRequester.canceled && ajaxRequester.canceled(id);
+            });
+        }
+        qq.extend(this, new qq.UploadHandler(spec));
+        qq.override(this, function(super_) {
+            return {
+                add: function(id, blobOrProxy) {
+                    if (qq.isFile(blobOrProxy) || qq.isBlob(blobOrProxy)) {
+                        super_.add(id, {
+                            file: blobOrProxy
+                        });
+                    } else if (blobOrProxy instanceof qq.BlobProxy) {
+                        super_.add(id, {
+                            proxy: blobOrProxy
+                        });
+                    } else {
+                        throw new Error("Passed obj is not a File, Blob, or proxy");
+                    }
+                    handler._initTempState(id);
+                    resumeEnabled && handler._maybePrepareForResume(id);
+                },
+                expunge: function(id) {
+                    abort(id);
+                    handler._maybeDeletePersistedChunkData(id);
+                    handler._clearXhrs(id);
+                    super_.expunge(id);
+                }
+            };
+        });
+        qq.extend(this, {
+            clearCachedChunk: function(id, chunkIdx) {
+                delete handler._getFileState(id).temp.cachedChunks[chunkIdx];
+            },
+            clearXhr: function(id, chunkIdx) {
+                var tempState = handler._getFileState(id).temp;
+                if (tempState.xhrs) {
+                    delete tempState.xhrs[chunkIdx];
+                }
+                if (tempState.ajaxRequesters) {
+                    delete tempState.ajaxRequesters[chunkIdx];
+                }
+            },
+            finalizeChunks: function(id, responseParser) {
+                var lastChunkIdx = handler._getTotalChunks(id) - 1, xhr = handler._getXhr(id, lastChunkIdx);
+                if (responseParser) {
+                    return new qq.Promise().success(responseParser(xhr), xhr);
+                }
+                return new qq.Promise().success({}, xhr);
+            },
+            getFile: function(id) {
+                return handler.isValid(id) && handler._getFileState(id).file;
+            },
+            getProxy: function(id) {
+                return handler.isValid(id) && handler._getFileState(id).proxy;
+            },
+            getResumableFilesData: function() {
+                var resumableFilesData = [];
+                handler._iterateResumeRecords(function(key, uploadData) {
+                    handler.moveInProgressToRemaining(null, uploadData.chunking.inProgress, uploadData.chunking.remaining);
+                    var data = {
+                        name: uploadData.name,
+                        remaining: uploadData.chunking.remaining,
+                        size: uploadData.size,
+                        uuid: uploadData.uuid
+                    };
+                    if (uploadData.key) {
+                        data.key = uploadData.key;
+                    }
+                    resumableFilesData.push(data);
+                });
+                return resumableFilesData;
+            },
+            isResumable: function(id) {
+                return !!chunking && handler.isValid(id) && !handler._getFileState(id).notResumable;
+            },
+            moveInProgressToRemaining: function(id, optInProgress, optRemaining) {
+                var inProgress = optInProgress || handler._getFileState(id).chunking.inProgress, remaining = optRemaining || handler._getFileState(id).chunking.remaining;
+                if (inProgress) {
+                    log(qq.format("Moving these chunks from in-progress {}, to remaining.", JSON.stringify(inProgress)));
+                    inProgress.reverse();
+                    qq.each(inProgress, function(idx, chunkIdx) {
+                        remaining.unshift(chunkIdx);
+                    });
+                    inProgress.length = 0;
+                }
+            },
+            pause: function(id) {
+                if (handler.isValid(id)) {
+                    log(qq.format("Aborting XHR upload for {} '{}' due to pause instruction.", id, getName(id)));
+                    handler._getFileState(id).paused = true;
+                    abort(id);
+                    return true;
+                }
+            },
+            reevaluateChunking: function(id) {
+                if (chunking && handler.isValid(id)) {
+                    var state = handler._getFileState(id), totalChunks, i;
+                    delete state.chunking;
+                    state.chunking = {};
+                    totalChunks = handler._getTotalChunks(id);
+                    if (totalChunks > 1 || chunking.mandatory) {
+                        state.chunking.enabled = true;
+                        state.chunking.parts = totalChunks;
+                        state.chunking.remaining = [];
+                        for (i = 0; i < totalChunks; i++) {
+                            state.chunking.remaining.push(i);
+                        }
+                        handler._initTempState(id);
+                    } else {
+                        state.chunking.enabled = false;
+                    }
+                }
+            },
+            updateBlob: function(id, newBlob) {
+                if (handler.isValid(id)) {
+                    handler._getFileState(id).file = newBlob;
+                }
+            },
+            _clearXhrs: function(id) {
+                var tempState = handler._getFileState(id).temp;
+                qq.each(tempState.ajaxRequesters, function(chunkId) {
+                    delete tempState.ajaxRequesters[chunkId];
+                });
+                qq.each(tempState.xhrs, function(chunkId) {
+                    delete tempState.xhrs[chunkId];
+                });
+            },
+            _createXhr: function(id, optChunkIdx) {
+                return handler._registerXhr(id, optChunkIdx, qq.createXhrInstance());
+            },
+            _getAjaxRequester: function(id, optChunkIdx) {
+                var chunkIdx = optChunkIdx == null ? -1 : optChunkIdx;
+                return handler._getFileState(id).temp.ajaxRequesters[chunkIdx];
+            },
+            _getChunkData: function(id, chunkIndex) {
+                var chunkSize = chunking.partSize, fileSize = getSize(id), fileOrBlob = handler.getFile(id), startBytes = chunkSize * chunkIndex, endBytes = startBytes + chunkSize >= fileSize ? fileSize : startBytes + chunkSize, totalChunks = handler._getTotalChunks(id), cachedChunks = this._getFileState(id).temp.cachedChunks, blob = cachedChunks[chunkIndex] || qq.sliceBlob(fileOrBlob, startBytes, endBytes);
+                cachedChunks[chunkIndex] = blob;
+                return {
+                    part: chunkIndex,
+                    start: startBytes,
+                    end: endBytes,
+                    count: totalChunks,
+                    blob: blob,
+                    size: endBytes - startBytes
+                };
+            },
+            _getChunkDataForCallback: function(chunkData) {
+                return {
+                    partIndex: chunkData.part,
+                    startByte: chunkData.start + 1,
+                    endByte: chunkData.end,
+                    totalParts: chunkData.count
+                };
+            },
+            _getLocalStorageId: function(id) {
+                var formatVersion = "5.0", name = getName(id), size = getSize(id), chunkSize = chunking.partSize, endpoint = getEndpoint(id);
+                return qq.format("qq{}resume{}-{}-{}-{}-{}", namespace, formatVersion, name, size, chunkSize, endpoint);
+            },
+            _getMimeType: function(id) {
+                return handler.getFile(id).type;
+            },
+            _getPersistableData: function(id) {
+                return handler._getFileState(id).chunking;
+            },
+            _getTotalChunks: function(id) {
+                if (chunking) {
+                    var fileSize = getSize(id), chunkSize = chunking.partSize;
+                    return Math.ceil(fileSize / chunkSize);
+                }
+            },
+            _getXhr: function(id, optChunkIdx) {
+                var chunkIdx = optChunkIdx == null ? -1 : optChunkIdx;
+                return handler._getFileState(id).temp.xhrs[chunkIdx];
+            },
+            _getXhrs: function(id) {
+                return handler._getFileState(id).temp.xhrs;
+            },
+            _iterateResumeRecords: function(callback) {
+                if (resumeEnabled) {
+                    qq.each(localStorage, function(key, item) {
+                        if (key.indexOf(qq.format("qq{}resume", namespace)) === 0) {
+                            var uploadData = JSON.parse(item);
+                            callback(key, uploadData);
+                        }
+                    });
+                }
+            },
+            _initTempState: function(id) {
+                handler._getFileState(id).temp = {
+                    ajaxRequesters: {},
+                    chunkProgress: {},
+                    xhrs: {},
+                    cachedChunks: {}
+                };
+            },
+            _markNotResumable: function(id) {
+                handler._getFileState(id).notResumable = true;
+            },
+            _maybeDeletePersistedChunkData: function(id) {
+                var localStorageId;
+                if (resumeEnabled && handler.isResumable(id)) {
+                    localStorageId = handler._getLocalStorageId(id);
+                    if (localStorageId && localStorage.getItem(localStorageId)) {
+                        localStorage.removeItem(localStorageId);
+                        return true;
+                    }
+                }
+                return false;
+            },
+            _maybePrepareForResume: function(id) {
+                var state = handler._getFileState(id), localStorageId, persistedData;
+                if (resumeEnabled && state.key === undefined) {
+                    localStorageId = handler._getLocalStorageId(id);
+                    persistedData = localStorage.getItem(localStorageId);
+                    if (persistedData) {
+                        persistedData = JSON.parse(persistedData);
+                        if (getDataByUuid(persistedData.uuid)) {
+                            handler._markNotResumable(id);
+                        } else {
+                            log(qq.format("Identified file with ID {} and name of {} as resumable.", id, getName(id)));
+                            onUuidChanged(id, persistedData.uuid);
+                            state.key = persistedData.key;
+                            state.chunking = persistedData.chunking;
+                            state.loaded = persistedData.loaded;
+                            state.attemptingResume = true;
+                            handler.moveInProgressToRemaining(id);
+                        }
+                    }
+                }
+            },
+            _maybePersistChunkedState: function(id) {
+                var state = handler._getFileState(id), localStorageId, persistedData;
+                if (resumeEnabled && handler.isResumable(id)) {
+                    localStorageId = handler._getLocalStorageId(id);
+                    persistedData = {
+                        name: getName(id),
+                        size: getSize(id),
+                        uuid: getUuid(id),
+                        key: state.key,
+                        chunking: state.chunking,
+                        loaded: state.loaded,
+                        lastUpdated: Date.now()
+                    };
+                    try {
+                        localStorage.setItem(localStorageId, JSON.stringify(persistedData));
+                    } catch (error) {
+                        log(qq.format("Unable to save resume data for '{}' due to error: '{}'.", id, error.toString()), "warn");
+                    }
+                }
+            },
+            _registerProgressHandler: function(id, chunkIdx, chunkSize) {
+                var xhr = handler._getXhr(id, chunkIdx), name = getName(id), progressCalculator = {
+                    simple: function(loaded, total) {
+                        var fileSize = getSize(id);
+                        if (loaded === total) {
+                            onProgress(id, name, fileSize, fileSize);
+                        } else {
+                            onProgress(id, name, loaded >= fileSize ? fileSize - 1 : loaded, fileSize);
+                        }
+                    },
+                    chunked: function(loaded, total) {
+                        var chunkProgress = handler._getFileState(id).temp.chunkProgress, totalSuccessfullyLoadedForFile = handler._getFileState(id).loaded, loadedForRequest = loaded, totalForRequest = total, totalFileSize = getSize(id), estActualChunkLoaded = loadedForRequest - (totalForRequest - chunkSize), totalLoadedForFile = totalSuccessfullyLoadedForFile;
+                        chunkProgress[chunkIdx] = estActualChunkLoaded;
+                        qq.each(chunkProgress, function(chunkIdx, chunkLoaded) {
+                            totalLoadedForFile += chunkLoaded;
+                        });
+                        onProgress(id, name, totalLoadedForFile, totalFileSize);
+                    }
+                };
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        var type = chunkSize == null ? "simple" : "chunked";
+                        progressCalculator[type](e.loaded, e.total);
+                    }
+                };
+            },
+            _registerXhr: function(id, optChunkIdx, xhr, optAjaxRequester) {
+                var xhrsId = optChunkIdx == null ? -1 : optChunkIdx, tempState = handler._getFileState(id).temp;
+                tempState.xhrs = tempState.xhrs || {};
+                tempState.ajaxRequesters = tempState.ajaxRequesters || {};
+                tempState.xhrs[xhrsId] = xhr;
+                if (optAjaxRequester) {
+                    tempState.ajaxRequesters[xhrsId] = optAjaxRequester;
+                }
+                return xhr;
+            },
+            _removeExpiredChunkingRecords: function() {
+                var expirationDays = resume.recordsExpireIn;
+                handler._iterateResumeRecords(function(key, uploadData) {
+                    var expirationDate = new Date(uploadData.lastUpdated);
+                    expirationDate.setDate(expirationDate.getDate() + expirationDays);
+                    if (expirationDate.getTime() <= Date.now()) {
+                        log("Removing expired resume record with key " + key);
+                        localStorage.removeItem(key);
+                    }
+                });
+            },
+            _shouldChunkThisFile: function(id) {
+                var state = handler._getFileState(id);
+                if (!state.chunking) {
+                    handler.reevaluateChunking(id);
+                }
+                return state.chunking.enabled;
+            }
+        });
+    };
+    qq.DeleteFileAjaxRequester = function(o) {
+        "use strict";
+        var requester, options = {
+            method: "DELETE",
+            uuidParamName: "qquuid",
+            endpointStore: {},
+            maxConnections: 3,
+            customHeaders: function(id) {
+                return {};
+            },
+            paramsStore: {},
+            cors: {
+                expected: false,
+                sendCredentials: false
+            },
+            log: function(str, level) {},
+            onDelete: function(id) {},
+            onDeleteComplete: function(id, xhrOrXdr, isError) {}
+        };
+        qq.extend(options, o);
+        function getMandatedParams() {
+            if (options.method.toUpperCase() === "POST") {
+                return {
+                    _method: "DELETE"
+                };
+            }
+            return {};
+        }
+        requester = qq.extend(this, new qq.AjaxRequester({
+            acceptHeader: "application/json",
+            validMethods: [ "POST", "DELETE" ],
+            method: options.method,
+            endpointStore: options.endpointStore,
+            paramsStore: options.paramsStore,
+            mandatedParams: getMandatedParams(),
+            maxConnections: options.maxConnections,
+            customHeaders: function(id) {
+                return options.customHeaders.get(id);
+            },
+            log: options.log,
+            onSend: options.onDelete,
+            onComplete: options.onDeleteComplete,
+            cors: options.cors
+        }));
+        qq.extend(this, {
+            sendDelete: function(id, uuid, additionalMandatedParams) {
+                var additionalOptions = additionalMandatedParams || {};
+                options.log("Submitting delete file request for " + id);
+                if (options.method === "DELETE") {
+                    requester.initTransport(id).withPath(uuid).withParams(additionalOptions).send();
+                } else {
+                    additionalOptions[options.uuidParamName] = uuid;
+                    requester.initTransport(id).withParams(additionalOptions).send();
+                }
+            }
+        });
+    };
+    (function() {
+        function detectSubsampling(img) {
+            var iw = img.naturalWidth, ih = img.naturalHeight, canvas = document.createElement("canvas"), ctx;
+            if (iw * ih > 1024 * 1024) {
+                canvas.width = canvas.height = 1;
+                ctx = canvas.getContext("2d");
+                ctx.drawImage(img, -iw + 1, 0);
+                return ctx.getImageData(0, 0, 1, 1).data[3] === 0;
+            } else {
+                return false;
+            }
+        }
+        function detectVerticalSquash(img, iw, ih) {
+            var canvas = document.createElement("canvas"), sy = 0, ey = ih, py = ih, ctx, data, alpha, ratio;
+            canvas.width = 1;
+            canvas.height = ih;
+            ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            data = ctx.getImageData(0, 0, 1, ih).data;
+            while (py > sy) {
+                alpha = data[(py - 1) * 4 + 3];
+                if (alpha === 0) {
+                    ey = py;
+                } else {
+                    sy = py;
+                }
+                py = ey + sy >> 1;
+            }
+            ratio = py / ih;
+            return ratio === 0 ? 1 : ratio;
+        }
+        function renderImageToDataURL(img, blob, options, doSquash) {
+            var canvas = document.createElement("canvas"), mime = options.mime || "image/jpeg", promise = new qq.Promise();
+            renderImageToCanvas(img, blob, canvas, options, doSquash).then(function() {
+                promise.success(canvas.toDataURL(mime, options.quality || .8));
+            });
+            return promise;
+        }
+        function maybeCalculateDownsampledDimensions(spec) {
+            var maxPixels = 5241e3;
+            if (!qq.ios()) {
+                throw new qq.Error("Downsampled dimensions can only be reliably calculated for iOS!");
+            }
+            if (spec.origHeight * spec.origWidth > maxPixels) {
+                return {
+                    newHeight: Math.round(Math.sqrt(maxPixels * (spec.origHeight / spec.origWidth))),
+                    newWidth: Math.round(Math.sqrt(maxPixels * (spec.origWidth / spec.origHeight)))
+                };
+            }
+        }
+        function renderImageToCanvas(img, blob, canvas, options, doSquash) {
+            var iw = img.naturalWidth, ih = img.naturalHeight, width = options.width, height = options.height, ctx = canvas.getContext("2d"), promise = new qq.Promise(), modifiedDimensions;
+            ctx.save();
+            if (options.resize) {
+                return renderImageToCanvasWithCustomResizer({
+                    blob: blob,
+                    canvas: canvas,
+                    image: img,
+                    imageHeight: ih,
+                    imageWidth: iw,
+                    orientation: options.orientation,
+                    resize: options.resize,
+                    targetHeight: height,
+                    targetWidth: width
+                });
+            }
+            if (!qq.supportedFeatures.unlimitedScaledImageSize) {
+                modifiedDimensions = maybeCalculateDownsampledDimensions({
+                    origWidth: width,
+                    origHeight: height
+                });
+                if (modifiedDimensions) {
+                    qq.log(qq.format("Had to reduce dimensions due to device limitations from {}w / {}h to {}w / {}h", width, height, modifiedDimensions.newWidth, modifiedDimensions.newHeight), "warn");
+                    width = modifiedDimensions.newWidth;
+                    height = modifiedDimensions.newHeight;
+                }
+            }
+            transformCoordinate(canvas, width, height, options.orientation);
+            if (qq.ios()) {
+                (function() {
+                    if (detectSubsampling(img)) {
+                        iw /= 2;
+                        ih /= 2;
+                    }
+                    var d = 1024, tmpCanvas = document.createElement("canvas"), vertSquashRatio = doSquash ? detectVerticalSquash(img, iw, ih) : 1, dw = Math.ceil(d * width / iw), dh = Math.ceil(d * height / ih / vertSquashRatio), sy = 0, dy = 0, tmpCtx, sx, dx;
+                    tmpCanvas.width = tmpCanvas.height = d;
+                    tmpCtx = tmpCanvas.getContext("2d");
+                    while (sy < ih) {
+                        sx = 0;
+                        dx = 0;
+                        while (sx < iw) {
+                            tmpCtx.clearRect(0, 0, d, d);
+                            tmpCtx.drawImage(img, -sx, -sy);
+                            ctx.drawImage(tmpCanvas, 0, 0, d, d, dx, dy, dw, dh);
+                            sx += d;
+                            dx += dw;
+                        }
+                        sy += d;
+                        dy += dh;
+                    }
+                    ctx.restore();
+                    tmpCanvas = tmpCtx = null;
+                })();
+            } else {
+                ctx.drawImage(img, 0, 0, width, height);
+            }
+            canvas.qqImageRendered && canvas.qqImageRendered();
+            promise.success();
+            return promise;
+        }
+        function renderImageToCanvasWithCustomResizer(resizeInfo) {
+            var blob = resizeInfo.blob, image = resizeInfo.image, imageHeight = resizeInfo.imageHeight, imageWidth = resizeInfo.imageWidth, orientation = resizeInfo.orientation, promise = new qq.Promise(), resize = resizeInfo.resize, sourceCanvas = document.createElement("canvas"), sourceCanvasContext = sourceCanvas.getContext("2d"), targetCanvas = resizeInfo.canvas, targetHeight = resizeInfo.targetHeight, targetWidth = resizeInfo.targetWidth;
+            transformCoordinate(sourceCanvas, imageWidth, imageHeight, orientation);
+            targetCanvas.height = targetHeight;
+            targetCanvas.width = targetWidth;
+            sourceCanvasContext.drawImage(image, 0, 0);
+            resize({
+                blob: blob,
+                height: targetHeight,
+                image: image,
+                sourceCanvas: sourceCanvas,
+                targetCanvas: targetCanvas,
+                width: targetWidth
+            }).then(function success() {
+                targetCanvas.qqImageRendered && targetCanvas.qqImageRendered();
+                promise.success();
+            }, promise.failure);
+            return promise;
+        }
+        function transformCoordinate(canvas, width, height, orientation) {
+            switch (orientation) {
+              case 5:
+              case 6:
+              case 7:
+              case 8:
+                canvas.width = height;
+                canvas.height = width;
+                break;
+
+              default:
+                canvas.width = width;
+                canvas.height = height;
+            }
+            var ctx = canvas.getContext("2d");
+            switch (orientation) {
+              case 2:
+                ctx.translate(width, 0);
+                ctx.scale(-1, 1);
+                break;
+
+              case 3:
+                ctx.translate(width, height);
+                ctx.rotate(Math.PI);
+                break;
+
+              case 4:
+                ctx.translate(0, height);
+                ctx.scale(1, -1);
+                break;
+
+              case 5:
+                ctx.rotate(.5 * Math.PI);
+                ctx.scale(1, -1);
+                break;
+
+              case 6:
+                ctx.rotate(.5 * Math.PI);
+                ctx.translate(0, -height);
+                break;
+
+              case 7:
+                ctx.rotate(.5 * Math.PI);
+                ctx.translate(width, -height);
+                ctx.scale(-1, 1);
+                break;
+
+              case 8:
+                ctx.rotate(-.5 * Math.PI);
+                ctx.translate(-width, 0);
+                break;
+
+              default:
+                break;
+            }
+        }
+        function MegaPixImage(srcImage, errorCallback) {
+            var self = this;
+            if (window.Blob && srcImage instanceof Blob) {
+                (function() {
+                    var img = new Image(), URL = window.URL && window.URL.createObjectURL ? window.URL : window.webkitURL && window.webkitURL.createObjectURL ? window.webkitURL : null;
+                    if (!URL) {
+                        throw Error("No createObjectURL function found to create blob url");
+                    }
+                    img.src = URL.createObjectURL(srcImage);
+                    self.blob = srcImage;
+                    srcImage = img;
+                })();
+            }
+            if (!srcImage.naturalWidth && !srcImage.naturalHeight) {
+                srcImage.onload = function() {
+                    var listeners = self.imageLoadListeners;
+                    if (listeners) {
+                        self.imageLoadListeners = null;
+                        setTimeout(function() {
+                            for (var i = 0, len = listeners.length; i < len; i++) {
+                                listeners[i]();
+                            }
+                        }, 0);
+                    }
+                };
+                srcImage.onerror = errorCallback;
+                this.imageLoadListeners = [];
+            }
+            this.srcImage = srcImage;
+        }
+        MegaPixImage.prototype.render = function(target, options) {
+            options = options || {};
+            var self = this, imgWidth = this.srcImage.naturalWidth, imgHeight = this.srcImage.naturalHeight, width = options.width, height = options.height, maxWidth = options.maxWidth, maxHeight = options.maxHeight, doSquash = !this.blob || this.blob.type === "image/jpeg", tagName = target.tagName.toLowerCase(), opt;
+            if (this.imageLoadListeners) {
+                this.imageLoadListeners.push(function() {
+                    self.render(target, options);
+                });
+                return;
+            }
+            if (width && !height) {
+                height = imgHeight * width / imgWidth << 0;
+            } else if (height && !width) {
+                width = imgWidth * height / imgHeight << 0;
+            } else {
+                width = imgWidth;
+                height = imgHeight;
+            }
+            if (maxWidth && width > maxWidth) {
+                width = maxWidth;
+                height = imgHeight * width / imgWidth << 0;
+            }
+            if (maxHeight && height > maxHeight) {
+                height = maxHeight;
+                width = imgWidth * height / imgHeight << 0;
+            }
+            opt = {
+                width: width,
+                height: height
+            }, qq.each(options, function(optionsKey, optionsValue) {
+                opt[optionsKey] = optionsValue;
+            });
+            if (tagName === "img") {
+                (function() {
+                    var oldTargetSrc = target.src;
+                    renderImageToDataURL(self.srcImage, self.blob, opt, doSquash).then(function(dataUri) {
+                        target.src = dataUri;
+                        oldTargetSrc === target.src && target.onload();
+                    });
+                })();
+            } else if (tagName === "canvas") {
+                renderImageToCanvas(this.srcImage, this.blob, target, opt, doSquash);
+            }
+            if (typeof this.onrender === "function") {
+                this.onrender(target);
+            }
+        };
+        qq.MegaPixImage = MegaPixImage;
+    })();
+    qq.ImageGenerator = function(log) {
+        "use strict";
+        function isImg(el) {
+            return el.tagName.toLowerCase() === "img";
+        }
+        function isCanvas(el) {
+            return el.tagName.toLowerCase() === "canvas";
+        }
+        function isImgCorsSupported() {
+            return new Image().crossOrigin !== undefined;
+        }
+        function isCanvasSupported() {
+            var canvas = document.createElement("canvas");
+            return canvas.getContext && canvas.getContext("2d");
+        }
+        function determineMimeOfFileName(nameWithPath) {
+            var pathSegments = nameWithPath.split("/"), name = pathSegments[pathSegments.length - 1].split("?")[0], extension = qq.getExtension(name);
+            extension = extension && extension.toLowerCase();
+            switch (extension) {
+              case "jpeg":
+              case "jpg":
+                return "image/jpeg";
+
+              case "png":
+                return "image/png";
+
+              case "bmp":
+                return "image/bmp";
+
+              case "gif":
+                return "image/gif";
+
+              case "tiff":
+              case "tif":
+                return "image/tiff";
+            }
+        }
+        function isCrossOrigin(url) {
+            var targetAnchor = document.createElement("a"), targetProtocol, targetHostname, targetPort;
+            targetAnchor.href = url;
+            targetProtocol = targetAnchor.protocol;
+            targetPort = targetAnchor.port;
+            targetHostname = targetAnchor.hostname;
+            if (targetProtocol.toLowerCase() !== window.location.protocol.toLowerCase()) {
+                return true;
+            }
+            if (targetHostname.toLowerCase() !== window.location.hostname.toLowerCase()) {
+                return true;
+            }
+            if (targetPort !== window.location.port && !qq.ie()) {
+                return true;
+            }
+            return false;
+        }
+        function registerImgLoadListeners(img, promise) {
+            img.onload = function() {
+                img.onload = null;
+                img.onerror = null;
+                promise.success(img);
+            };
+            img.onerror = function() {
+                img.onload = null;
+                img.onerror = null;
+                log("Problem drawing thumbnail!", "error");
+                promise.failure(img, "Problem drawing thumbnail!");
+            };
+        }
+        function registerCanvasDrawImageListener(canvas, promise) {
+            canvas.qqImageRendered = function() {
+                promise.success(canvas);
+            };
+        }
+        function registerThumbnailRenderedListener(imgOrCanvas, promise) {
+            var registered = isImg(imgOrCanvas) || isCanvas(imgOrCanvas);
+            if (isImg(imgOrCanvas)) {
+                registerImgLoadListeners(imgOrCanvas, promise);
+            } else if (isCanvas(imgOrCanvas)) {
+                registerCanvasDrawImageListener(imgOrCanvas, promise);
+            } else {
+                promise.failure(imgOrCanvas);
+                log(qq.format("Element container of type {} is not supported!", imgOrCanvas.tagName), "error");
+            }
+            return registered;
+        }
+        function draw(fileOrBlob, container, options) {
+            var drawPreview = new qq.Promise(), identifier = new qq.Identify(fileOrBlob, log), maxSize = options.maxSize, orient = options.orient == null ? true : options.orient, megapixErrorHandler = function() {
+                container.onerror = null;
+                container.onload = null;
+                log("Could not render preview, file may be too large!", "error");
+                drawPreview.failure(container, "Browser cannot render image!");
+            };
+            identifier.isPreviewable().then(function(mime) {
+                var dummyExif = {
+                    parse: function() {
+                        return new qq.Promise().success();
+                    }
+                }, exif = orient ? new qq.Exif(fileOrBlob, log) : dummyExif, mpImg = new qq.MegaPixImage(fileOrBlob, megapixErrorHandler);
+                if (registerThumbnailRenderedListener(container, drawPreview)) {
+                    exif.parse().then(function(exif) {
+                        var orientation = exif && exif.Orientation;
+                        mpImg.render(container, {
+                            maxWidth: maxSize,
+                            maxHeight: maxSize,
+                            orientation: orientation,
+                            mime: mime,
+                            resize: options.customResizeFunction
+                        });
+                    }, function(failureMsg) {
+                        log(qq.format("EXIF data could not be parsed ({}).  Assuming orientation = 1.", failureMsg));
+                        mpImg.render(container, {
+                            maxWidth: maxSize,
+                            maxHeight: maxSize,
+                            mime: mime,
+                            resize: options.customResizeFunction
+                        });
+                    });
+                }
+            }, function() {
+                log("Not previewable");
+                drawPreview.failure(container, "Not previewable");
+            });
+            return drawPreview;
+        }
+        function drawOnCanvasOrImgFromUrl(url, canvasOrImg, draw, maxSize, customResizeFunction) {
+            var tempImg = new Image(), tempImgRender = new qq.Promise();
+            registerThumbnailRenderedListener(tempImg, tempImgRender);
+            if (isCrossOrigin(url)) {
+                tempImg.crossOrigin = "anonymous";
+            }
+            tempImg.src = url;
+            tempImgRender.then(function rendered() {
+                registerThumbnailRenderedListener(canvasOrImg, draw);
+                var mpImg = new qq.MegaPixImage(tempImg);
+                mpImg.render(canvasOrImg, {
+                    maxWidth: maxSize,
+                    maxHeight: maxSize,
+                    mime: determineMimeOfFileName(url),
+                    resize: customResizeFunction
+                });
+            }, draw.failure);
+        }
+        function drawOnImgFromUrlWithCssScaling(url, img, draw, maxSize) {
+            registerThumbnailRenderedListener(img, draw);
+            qq(img).css({
+                maxWidth: maxSize + "px",
+                maxHeight: maxSize + "px"
+            });
+            img.src = url;
+        }
+        function drawFromUrl(url, container, options) {
+            var draw = new qq.Promise(), scale = options.scale, maxSize = scale ? options.maxSize : null;
+            if (scale && isImg(container)) {
+                if (isCanvasSupported()) {
+                    if (isCrossOrigin(url) && !isImgCorsSupported()) {
+                        drawOnImgFromUrlWithCssScaling(url, container, draw, maxSize);
+                    } else {
+                        drawOnCanvasOrImgFromUrl(url, container, draw, maxSize);
+                    }
+                } else {
+                    drawOnImgFromUrlWithCssScaling(url, container, draw, maxSize);
+                }
+            } else if (isCanvas(container)) {
+                drawOnCanvasOrImgFromUrl(url, container, draw, maxSize);
+            } else if (registerThumbnailRenderedListener(container, draw)) {
+                container.src = url;
+            }
+            return draw;
+        }
+        qq.extend(this, {
+            generate: function(fileBlobOrUrl, container, options) {
+                if (qq.isString(fileBlobOrUrl)) {
+                    log("Attempting to update thumbnail based on server response.");
+                    return drawFromUrl(fileBlobOrUrl, container, options || {});
+                } else {
+                    log("Attempting to draw client-side image preview.");
+                    return draw(fileBlobOrUrl, container, options || {});
+                }
+            }
+        });
+        this._testing = {};
+        this._testing.isImg = isImg;
+        this._testing.isCanvas = isCanvas;
+        this._testing.isCrossOrigin = isCrossOrigin;
+        this._testing.determineMimeOfFileName = determineMimeOfFileName;
+    };
+    qq.Exif = function(fileOrBlob, log) {
+        "use strict";
+        var TAG_IDS = [ 274 ], TAG_INFO = {
+            274: {
+                name: "Orientation",
+                bytes: 2
+            }
+        };
+        function parseLittleEndian(hex) {
+            var result = 0, pow = 0;
+            while (hex.length > 0) {
+                result += parseInt(hex.substring(0, 2), 16) * Math.pow(2, pow);
+                hex = hex.substring(2, hex.length);
+                pow += 8;
+            }
+            return result;
+        }
+        function seekToApp1(offset, promise) {
+            var theOffset = offset, thePromise = promise;
+            if (theOffset === undefined) {
+                theOffset = 2;
+                thePromise = new qq.Promise();
+            }
+            qq.readBlobToHex(fileOrBlob, theOffset, 4).then(function(hex) {
+                var match = /^ffe([0-9])/.exec(hex), segmentLength;
+                if (match) {
+                    if (match[1] !== "1") {
+                        segmentLength = parseInt(hex.slice(4, 8), 16);
+                        seekToApp1(theOffset + segmentLength + 2, thePromise);
+                    } else {
+                        thePromise.success(theOffset);
+                    }
+                } else {
+                    thePromise.failure("No EXIF header to be found!");
+                }
+            });
+            return thePromise;
+        }
+        function getApp1Offset() {
+            var promise = new qq.Promise();
+            qq.readBlobToHex(fileOrBlob, 0, 6).then(function(hex) {
+                if (hex.indexOf("ffd8") !== 0) {
+                    promise.failure("Not a valid JPEG!");
+                } else {
+                    seekToApp1().then(function(offset) {
+                        promise.success(offset);
+                    }, function(error) {
+                        promise.failure(error);
+                    });
+                }
+            });
+            return promise;
+        }
+        function isLittleEndian(app1Start) {
+            var promise = new qq.Promise();
+            qq.readBlobToHex(fileOrBlob, app1Start + 10, 2).then(function(hex) {
+                promise.success(hex === "4949");
+            });
+            return promise;
+        }
+        function getDirEntryCount(app1Start, littleEndian) {
+            var promise = new qq.Promise();
+            qq.readBlobToHex(fileOrBlob, app1Start + 18, 2).then(function(hex) {
+                if (littleEndian) {
+                    return promise.success(parseLittleEndian(hex));
+                } else {
+                    promise.success(parseInt(hex, 16));
+                }
+            });
+            return promise;
+        }
+        function getIfd(app1Start, dirEntries) {
+            var offset = app1Start + 20, bytes = dirEntries * 12;
+            return qq.readBlobToHex(fileOrBlob, offset, bytes);
+        }
+        function getDirEntries(ifdHex) {
+            var entries = [], offset = 0;
+            while (offset + 24 <= ifdHex.length) {
+                entries.push(ifdHex.slice(offset, offset + 24));
+                offset += 24;
+            }
+            return entries;
+        }
+        function getTagValues(littleEndian, dirEntries) {
+            var TAG_VAL_OFFSET = 16, tagsToFind = qq.extend([], TAG_IDS), vals = {};
+            qq.each(dirEntries, function(idx, entry) {
+                var idHex = entry.slice(0, 4), id = littleEndian ? parseLittleEndian(idHex) : parseInt(idHex, 16), tagsToFindIdx = tagsToFind.indexOf(id), tagValHex, tagName, tagValLength;
+                if (tagsToFindIdx >= 0) {
+                    tagName = TAG_INFO[id].name;
+                    tagValLength = TAG_INFO[id].bytes;
+                    tagValHex = entry.slice(TAG_VAL_OFFSET, TAG_VAL_OFFSET + tagValLength * 2);
+                    vals[tagName] = littleEndian ? parseLittleEndian(tagValHex) : parseInt(tagValHex, 16);
+                    tagsToFind.splice(tagsToFindIdx, 1);
+                }
+                if (tagsToFind.length === 0) {
+                    return false;
+                }
+            });
+            return vals;
+        }
+        qq.extend(this, {
+            parse: function() {
+                var parser = new qq.Promise(), onParseFailure = function(message) {
+                    log(qq.format("EXIF header parse failed: '{}' ", message));
+                    parser.failure(message);
+                };
+                getApp1Offset().then(function(app1Offset) {
+                    log(qq.format("Moving forward with EXIF header parsing for '{}'", fileOrBlob.name === undefined ? "blob" : fileOrBlob.name));
+                    isLittleEndian(app1Offset).then(function(littleEndian) {
+                        log(qq.format("EXIF Byte order is {} endian", littleEndian ? "little" : "big"));
+                        getDirEntryCount(app1Offset, littleEndian).then(function(dirEntryCount) {
+                            log(qq.format("Found {} APP1 directory entries", dirEntryCount));
+                            getIfd(app1Offset, dirEntryCount).then(function(ifdHex) {
+                                var dirEntries = getDirEntries(ifdHex), tagValues = getTagValues(littleEndian, dirEntries);
+                                log("Successfully parsed some EXIF tags");
+                                parser.success(tagValues);
+                            }, onParseFailure);
+                        }, onParseFailure);
+                    }, onParseFailure);
+                }, onParseFailure);
+                return parser;
+            }
+        });
+        this._testing = {};
+        this._testing.parseLittleEndian = parseLittleEndian;
+    };
+    qq.Identify = function(fileOrBlob, log) {
+        "use strict";
+        function isIdentifiable(magicBytes, questionableBytes) {
+            var identifiable = false, magicBytesEntries = [].concat(magicBytes);
+            qq.each(magicBytesEntries, function(idx, magicBytesArrayEntry) {
+                if (questionableBytes.indexOf(magicBytesArrayEntry) === 0) {
+                    identifiable = true;
+                    return false;
+                }
+            });
+            return identifiable;
+        }
+        qq.extend(this, {
+            isPreviewable: function() {
+                var self = this, identifier = new qq.Promise(), previewable = false, name = fileOrBlob.name === undefined ? "blob" : fileOrBlob.name;
+                log(qq.format("Attempting to determine if {} can be rendered in this browser", name));
+                log("First pass: check type attribute of blob object.");
+                if (this.isPreviewableSync()) {
+                    log("Second pass: check for magic bytes in file header.");
+                    qq.readBlobToHex(fileOrBlob, 0, 4).then(function(hex) {
+                        qq.each(self.PREVIEWABLE_MIME_TYPES, function(mime, bytes) {
+                            if (isIdentifiable(bytes, hex)) {
+                                if (mime !== "image/tiff" || qq.supportedFeatures.tiffPreviews) {
+                                    previewable = true;
+                                    identifier.success(mime);
+                                }
+                                return false;
+                            }
+                        });
+                        log(qq.format("'{}' is {} able to be rendered in this browser", name, previewable ? "" : "NOT"));
+                        if (!previewable) {
+                            identifier.failure();
+                        }
+                    }, function() {
+                        log("Error reading file w/ name '" + name + "'.  Not able to be rendered in this browser.");
+                        identifier.failure();
+                    });
+                } else {
+                    identifier.failure();
+                }
+                return identifier;
+            },
+            isPreviewableSync: function() {
+                var fileMime = fileOrBlob.type, isRecognizedImage = qq.indexOf(Object.keys(this.PREVIEWABLE_MIME_TYPES), fileMime) >= 0, previewable = false, name = fileOrBlob.name === undefined ? "blob" : fileOrBlob.name;
+                if (isRecognizedImage) {
+                    if (fileMime === "image/tiff") {
+                        previewable = qq.supportedFeatures.tiffPreviews;
+                    } else {
+                        previewable = true;
+                    }
+                }
+                !previewable && log(name + " is not previewable in this browser per the blob's type attr");
+                return previewable;
+            }
+        });
+    };
+    qq.Identify.prototype.PREVIEWABLE_MIME_TYPES = {
+        "image/jpeg": "ffd8ff",
+        "image/gif": "474946",
+        "image/png": "89504e",
+        "image/bmp": "424d",
+        "image/tiff": [ "49492a00", "4d4d002a" ]
+    };
+    qq.ImageValidation = function(blob, log) {
+        "use strict";
+        function hasNonZeroLimits(limits) {
+            var atLeastOne = false;
+            qq.each(limits, function(limit, value) {
+                if (value > 0) {
+                    atLeastOne = true;
+                    return false;
+                }
+            });
+            return atLeastOne;
+        }
+        function getWidthHeight() {
+            var sizeDetermination = new qq.Promise();
+            new qq.Identify(blob, log).isPreviewable().then(function() {
+                var image = new Image(), url = window.URL && window.URL.createObjectURL ? window.URL : window.webkitURL && window.webkitURL.createObjectURL ? window.webkitURL : null;
+                if (url) {
+                    image.onerror = function() {
+                        log("Cannot determine dimensions for image.  May be too large.", "error");
+                        sizeDetermination.failure();
+                    };
+                    image.onload = function() {
+                        sizeDetermination.success({
+                            width: this.width,
+                            height: this.height
+                        });
+                    };
+                    image.src = url.createObjectURL(blob);
+                } else {
+                    log("No createObjectURL function available to generate image URL!", "error");
+                    sizeDetermination.failure();
+                }
+            }, sizeDetermination.failure);
+            return sizeDetermination;
+        }
+        function getFailingLimit(limits, dimensions) {
+            var failingLimit;
+            qq.each(limits, function(limitName, limitValue) {
+                if (limitValue > 0) {
+                    var limitMatcher = /(max|min)(Width|Height)/.exec(limitName), dimensionPropName = limitMatcher[2].charAt(0).toLowerCase() + limitMatcher[2].slice(1), actualValue = dimensions[dimensionPropName];
+                    switch (limitMatcher[1]) {
+                      case "min":
+                        if (actualValue < limitValue) {
+                            failingLimit = limitName;
+                            return false;
+                        }
+                        break;
+
+                      case "max":
+                        if (actualValue > limitValue) {
+                            failingLimit = limitName;
+                            return false;
+                        }
+                        break;
+                    }
+                }
+            });
+            return failingLimit;
+        }
+        this.validate = function(limits) {
+            var validationEffort = new qq.Promise();
+            log("Attempting to validate image.");
+            if (hasNonZeroLimits(limits)) {
+                getWidthHeight().then(function(dimensions) {
+                    var failingLimit = getFailingLimit(limits, dimensions);
+                    if (failingLimit) {
+                        validationEffort.failure(failingLimit);
+                    } else {
+                        validationEffort.success();
+                    }
+                }, validationEffort.success);
+            } else {
+                validationEffort.success();
+            }
+            return validationEffort;
+        };
+    };
+    qq.Session = function(spec) {
+        "use strict";
+        var options = {
+            endpoint: null,
+            params: {},
+            customHeaders: {},
+            cors: {},
+            addFileRecord: function(sessionData) {},
+            log: function(message, level) {}
+        };
+        qq.extend(options, spec, true);
+        function isJsonResponseValid(response) {
+            if (qq.isArray(response)) {
+                return true;
+            }
+            options.log("Session response is not an array.", "error");
+        }
+        function handleFileItems(fileItems, success, xhrOrXdr, promise) {
+            var someItemsIgnored = false;
+            success = success && isJsonResponseValid(fileItems);
+            if (success) {
+                qq.each(fileItems, function(idx, fileItem) {
+                    if (fileItem.uuid == null) {
+                        someItemsIgnored = true;
+                        options.log(qq.format("Session response item {} did not include a valid UUID - ignoring.", idx), "error");
+                    } else if (fileItem.name == null) {
+                        someItemsIgnored = true;
+                        options.log(qq.format("Session response item {} did not include a valid name - ignoring.", idx), "error");
+                    } else {
+                        try {
+                            options.addFileRecord(fileItem);
+                            return true;
+                        } catch (err) {
+                            someItemsIgnored = true;
+                            options.log(err.message, "error");
+                        }
+                    }
+                    return false;
+                });
+            }
+            promise[success && !someItemsIgnored ? "success" : "failure"](fileItems, xhrOrXdr);
+        }
+        this.refresh = function() {
+            var refreshEffort = new qq.Promise(), refreshCompleteCallback = function(response, success, xhrOrXdr) {
+                handleFileItems(response, success, xhrOrXdr, refreshEffort);
+            }, requesterOptions = qq.extend({}, options), requester = new qq.SessionAjaxRequester(qq.extend(requesterOptions, {
+                onComplete: refreshCompleteCallback
+            }));
+            requester.queryServer();
+            return refreshEffort;
+        };
+    };
+    qq.SessionAjaxRequester = function(spec) {
+        "use strict";
+        var requester, options = {
+            endpoint: null,
+            customHeaders: {},
+            params: {},
+            cors: {
+                expected: false,
+                sendCredentials: false
+            },
+            onComplete: function(response, success, xhrOrXdr) {},
+            log: function(str, level) {}
+        };
+        qq.extend(options, spec);
+        function onComplete(id, xhrOrXdr, isError) {
+            var response = null;
+            if (xhrOrXdr.responseText != null) {
+                try {
+                    response = qq.parseJson(xhrOrXdr.responseText);
+                } catch (err) {
+                    options.log("Problem parsing session response: " + err.message, "error");
+                    isError = true;
+                }
+            }
+            options.onComplete(response, !isError, xhrOrXdr);
+        }
+        requester = qq.extend(this, new qq.AjaxRequester({
+            acceptHeader: "application/json",
+            validMethods: [ "GET" ],
+            method: "GET",
+            endpointStore: {
+                get: function() {
+                    return options.endpoint;
+                }
+            },
+            customHeaders: options.customHeaders,
+            log: options.log,
+            onComplete: onComplete,
+            cors: options.cors
+        }));
+        qq.extend(this, {
+            queryServer: function() {
+                var params = qq.extend({}, options.params);
+                options.log("Session query request.");
+                requester.initTransport("sessionRefresh").withParams(params).withCacheBuster().send();
+            }
+        });
+    };
+    qq.Scaler = function(spec, log) {
+        "use strict";
+        var self = this, customResizeFunction = spec.customResizer, includeOriginal = spec.sendOriginal, orient = spec.orient, defaultType = spec.defaultType, defaultQuality = spec.defaultQuality / 100, failedToScaleText = spec.failureText, includeExif = spec.includeExif, sizes = this._getSortedSizes(spec.sizes);
+        qq.extend(this, {
+            enabled: qq.supportedFeatures.scaling && sizes.length > 0,
+            getFileRecords: function(originalFileUuid, originalFileName, originalBlobOrBlobData) {
+                var self = this, records = [], originalBlob = originalBlobOrBlobData.blob ? originalBlobOrBlobData.blob : originalBlobOrBlobData, identifier = new qq.Identify(originalBlob, log);
+                if (identifier.isPreviewableSync()) {
+                    qq.each(sizes, function(idx, sizeRecord) {
+                        var outputType = self._determineOutputType({
+                            defaultType: defaultType,
+                            requestedType: sizeRecord.type,
+                            refType: originalBlob.type
+                        });
+                        records.push({
+                            uuid: qq.getUniqueId(),
+                            name: self._getName(originalFileName, {
+                                name: sizeRecord.name,
+                                type: outputType,
+                                refType: originalBlob.type
+                            }),
+                            blob: new qq.BlobProxy(originalBlob, qq.bind(self._generateScaledImage, self, {
+                                customResizeFunction: customResizeFunction,
+                                maxSize: sizeRecord.maxSize,
+                                orient: orient,
+                                type: outputType,
+                                quality: defaultQuality,
+                                failedText: failedToScaleText,
+                                includeExif: includeExif,
+                                log: log
+                            }))
+                        });
+                    });
+                    records.push({
+                        uuid: originalFileUuid,
+                        name: originalFileName,
+                        size: originalBlob.size,
+                        blob: includeOriginal ? originalBlob : null
+                    });
+                } else {
+                    records.push({
+                        uuid: originalFileUuid,
+                        name: originalFileName,
+                        size: originalBlob.size,
+                        blob: originalBlob
+                    });
+                }
+                return records;
+            },
+            handleNewFile: function(file, name, uuid, size, fileList, batchId, uuidParamName, api) {
+                var self = this, buttonId = file.qqButtonId || file.blob && file.blob.qqButtonId, scaledIds = [], originalId = null, addFileToHandler = api.addFileToHandler, uploadData = api.uploadData, paramsStore = api.paramsStore, proxyGroupId = qq.getUniqueId();
+                qq.each(self.getFileRecords(uuid, name, file), function(idx, record) {
+                    var blobSize = record.size, id;
+                    if (record.blob instanceof qq.BlobProxy) {
+                        blobSize = -1;
+                    }
+                    id = uploadData.addFile({
+                        uuid: record.uuid,
+                        name: record.name,
+                        size: blobSize,
+                        batchId: batchId,
+                        proxyGroupId: proxyGroupId
+                    });
+                    if (record.blob instanceof qq.BlobProxy) {
+                        scaledIds.push(id);
+                    } else {
+                        originalId = id;
+                    }
+                    if (record.blob) {
+                        addFileToHandler(id, record.blob);
+                        fileList.push({
+                            id: id,
+                            file: record.blob
+                        });
+                    } else {
+                        uploadData.setStatus(id, qq.status.REJECTED);
+                    }
+                });
+                if (originalId !== null) {
+                    qq.each(scaledIds, function(idx, scaledId) {
+                        var params = {
+                            qqparentuuid: uploadData.retrieve({
+                                id: originalId
+                            }).uuid,
+                            qqparentsize: uploadData.retrieve({
+                                id: originalId
+                            }).size
+                        };
+                        params[uuidParamName] = uploadData.retrieve({
+                            id: scaledId
+                        }).uuid;
+                        uploadData.setParentId(scaledId, originalId);
+                        paramsStore.addReadOnly(scaledId, params);
+                    });
+                    if (scaledIds.length) {
+                        (function() {
+                            var param = {};
+                            param[uuidParamName] = uploadData.retrieve({
+                                id: originalId
+                            }).uuid;
+                            paramsStore.addReadOnly(originalId, param);
+                        })();
+                    }
+                }
+            }
+        });
+    };
+    qq.extend(qq.Scaler.prototype, {
+        scaleImage: function(id, specs, api) {
+            "use strict";
+            if (!qq.supportedFeatures.scaling) {
+                throw new qq.Error("Scaling is not supported in this browser!");
+            }
+            var scalingEffort = new qq.Promise(), log = api.log, file = api.getFile(id), uploadData = api.uploadData.retrieve({
+                id: id
+            }), name = uploadData && uploadData.name, uuid = uploadData && uploadData.uuid, scalingOptions = {
+                customResizer: specs.customResizer,
+                sendOriginal: false,
+                orient: specs.orient,
+                defaultType: specs.type || null,
+                defaultQuality: specs.quality,
+                failedToScaleText: "Unable to scale",
+                sizes: [ {
+                    name: "",
+                    maxSize: specs.maxSize
+                } ]
+            }, scaler = new qq.Scaler(scalingOptions, log);
+            if (!qq.Scaler || !qq.supportedFeatures.imagePreviews || !file) {
+                scalingEffort.failure();
+                log("Could not generate requested scaled image for " + id + ".  " + "Scaling is either not possible in this browser, or the file could not be located.", "error");
+            } else {
+                qq.bind(function() {
+                    var record = scaler.getFileRecords(uuid, name, file)[0];
+                    if (record && record.blob instanceof qq.BlobProxy) {
+                        record.blob.create().then(scalingEffort.success, scalingEffort.failure);
+                    } else {
+                        log(id + " is not a scalable image!", "error");
+                        scalingEffort.failure();
+                    }
+                }, this)();
+            }
+            return scalingEffort;
+        },
+        _determineOutputType: function(spec) {
+            "use strict";
+            var requestedType = spec.requestedType, defaultType = spec.defaultType, referenceType = spec.refType;
+            if (!defaultType && !requestedType) {
+                if (referenceType !== "image/jpeg") {
+                    return "image/png";
+                }
+                return referenceType;
+            }
+            if (!requestedType) {
+                return defaultType;
+            }
+            if (qq.indexOf(Object.keys(qq.Identify.prototype.PREVIEWABLE_MIME_TYPES), requestedType) >= 0) {
+                if (requestedType === "image/tiff") {
+                    return qq.supportedFeatures.tiffPreviews ? requestedType : defaultType;
+                }
+                return requestedType;
+            }
+            return defaultType;
+        },
+        _getName: function(originalName, scaledVersionProperties) {
+            "use strict";
+            var startOfExt = originalName.lastIndexOf("."), versionType = scaledVersionProperties.type || "image/png", referenceType = scaledVersionProperties.refType, scaledName = "", scaledExt = qq.getExtension(originalName), nameAppendage = "";
+            if (scaledVersionProperties.name && scaledVersionProperties.name.trim().length) {
+                nameAppendage = " (" + scaledVersionProperties.name + ")";
+            }
+            if (startOfExt >= 0) {
+                scaledName = originalName.substr(0, startOfExt);
+                if (referenceType !== versionType) {
+                    scaledExt = versionType.split("/")[1];
+                }
+                scaledName += nameAppendage + "." + scaledExt;
+            } else {
+                scaledName = originalName + nameAppendage;
+            }
+            return scaledName;
+        },
+        _getSortedSizes: function(sizes) {
+            "use strict";
+            sizes = qq.extend([], sizes);
+            return sizes.sort(function(a, b) {
+                if (a.maxSize > b.maxSize) {
+                    return 1;
+                }
+                if (a.maxSize < b.maxSize) {
+                    return -1;
+                }
+                return 0;
+            });
+        },
+        _generateScaledImage: function(spec, sourceFile) {
+            "use strict";
+            var self = this, customResizeFunction = spec.customResizeFunction, log = spec.log, maxSize = spec.maxSize, orient = spec.orient, type = spec.type, quality = spec.quality, failedText = spec.failedText, includeExif = spec.includeExif && sourceFile.type === "image/jpeg" && type === "image/jpeg", scalingEffort = new qq.Promise(), imageGenerator = new qq.ImageGenerator(log), canvas = document.createElement("canvas");
+            log("Attempting to generate scaled version for " + sourceFile.name);
+            imageGenerator.generate(sourceFile, canvas, {
+                maxSize: maxSize,
+                orient: orient,
+                customResizeFunction: customResizeFunction
+            }).then(function() {
+                var scaledImageDataUri = canvas.toDataURL(type, quality), signalSuccess = function() {
+                    log("Success generating scaled version for " + sourceFile.name);
+                    var blob = qq.dataUriToBlob(scaledImageDataUri);
+                    scalingEffort.success(blob);
+                };
+                if (includeExif) {
+                    self._insertExifHeader(sourceFile, scaledImageDataUri, log).then(function(scaledImageDataUriWithExif) {
+                        scaledImageDataUri = scaledImageDataUriWithExif;
+                        signalSuccess();
+                    }, function() {
+                        log("Problem inserting EXIF header into scaled image.  Using scaled image w/out EXIF data.", "error");
+                        signalSuccess();
+                    });
+                } else {
+                    signalSuccess();
+                }
+            }, function() {
+                log("Failed attempt to generate scaled version for " + sourceFile.name, "error");
+                scalingEffort.failure(failedText);
+            });
+            return scalingEffort;
+        },
+        _insertExifHeader: function(originalImage, scaledImageDataUri, log) {
+            "use strict";
+            var reader = new FileReader(), insertionEffort = new qq.Promise(), originalImageDataUri = "";
+            reader.onload = function() {
+                originalImageDataUri = reader.result;
+                insertionEffort.success(qq.ExifRestorer.restore(originalImageDataUri, scaledImageDataUri));
+            };
+            reader.onerror = function() {
+                log("Problem reading " + originalImage.name + " during attempt to transfer EXIF data to scaled version.", "error");
+                insertionEffort.failure();
+            };
+            reader.readAsDataURL(originalImage);
+            return insertionEffort;
+        },
+        _dataUriToBlob: function(dataUri) {
+            "use strict";
+            var byteString, mimeString, arrayBuffer, intArray;
+            if (dataUri.split(",")[0].indexOf("base64") >= 0) {
+                byteString = atob(dataUri.split(",")[1]);
+            } else {
+                byteString = decodeURI(dataUri.split(",")[1]);
+            }
+            mimeString = dataUri.split(",")[0].split(":")[1].split(";")[0];
+            arrayBuffer = new ArrayBuffer(byteString.length);
+            intArray = new Uint8Array(arrayBuffer);
+            qq.each(byteString, function(idx, character) {
+                intArray[idx] = character.charCodeAt(0);
+            });
+            return this._createBlob(arrayBuffer, mimeString);
+        },
+        _createBlob: function(data, mime) {
+            "use strict";
+            var BlobBuilder = window.BlobBuilder || window.WebKitBlobBuilder || window.MozBlobBuilder || window.MSBlobBuilder, blobBuilder = BlobBuilder && new BlobBuilder();
+            if (blobBuilder) {
+                blobBuilder.append(data);
+                return blobBuilder.getBlob(mime);
+            } else {
+                return new Blob([ data ], {
+                    type: mime
+                });
+            }
+        }
+    });
+    qq.ExifRestorer = function() {
+        var ExifRestorer = {};
+        ExifRestorer.KEY_STR = "ABCDEFGHIJKLMNOP" + "QRSTUVWXYZabcdef" + "ghijklmnopqrstuv" + "wxyz0123456789+/" + "=";
+        ExifRestorer.encode64 = function(input) {
+            var output = "", chr1, chr2, chr3 = "", enc1, enc2, enc3, enc4 = "", i = 0;
+            do {
+                chr1 = input[i++];
+                chr2 = input[i++];
+                chr3 = input[i++];
+                enc1 = chr1 >> 2;
+                enc2 = (chr1 & 3) << 4 | chr2 >> 4;
+                enc3 = (chr2 & 15) << 2 | chr3 >> 6;
+                enc4 = chr3 & 63;
+                if (isNaN(chr2)) {
+                    enc3 = enc4 = 64;
+                } else if (isNaN(chr3)) {
+                    enc4 = 64;
+                }
+                output = output + this.KEY_STR.charAt(enc1) + this.KEY_STR.charAt(enc2) + this.KEY_STR.charAt(enc3) + this.KEY_STR.charAt(enc4);
+                chr1 = chr2 = chr3 = "";
+                enc1 = enc2 = enc3 = enc4 = "";
+            } while (i < input.length);
+            return output;
+        };
+        ExifRestorer.restore = function(origFileBase64, resizedFileBase64) {
+            var expectedBase64Header = "data:image/jpeg;base64,";
+            if (!origFileBase64.match(expectedBase64Header)) {
+                return resizedFileBase64;
+            }
+            var rawImage = this.decode64(origFileBase64.replace(expectedBase64Header, ""));
+            var segments = this.slice2Segments(rawImage);
+            var image = this.exifManipulation(resizedFileBase64, segments);
+            return expectedBase64Header + this.encode64(image);
+        };
+        ExifRestorer.exifManipulation = function(resizedFileBase64, segments) {
+            var exifArray = this.getExifArray(segments), newImageArray = this.insertExif(resizedFileBase64, exifArray), aBuffer = new Uint8Array(newImageArray);
+            return aBuffer;
+        };
+        ExifRestorer.getExifArray = function(segments) {
+            var seg;
+            for (var x = 0; x < segments.length; x++) {
+                seg = segments[x];
+                if (seg[0] == 255 & seg[1] == 225) {
+                    return seg;
+                }
+            }
+            return [];
+        };
+        ExifRestorer.insertExif = function(resizedFileBase64, exifArray) {
+            var imageData = resizedFileBase64.replace("data:image/jpeg;base64,", ""), buf = this.decode64(imageData), separatePoint = buf.indexOf(255, 3), mae = buf.slice(0, separatePoint), ato = buf.slice(separatePoint), array = mae;
+            array = array.concat(exifArray);
+            array = array.concat(ato);
+            return array;
+        };
+        ExifRestorer.slice2Segments = function(rawImageArray) {
+            var head = 0, segments = [];
+            while (1) {
+                if (rawImageArray[head] == 255 & rawImageArray[head + 1] == 218) {
+                    break;
+                }
+                if (rawImageArray[head] == 255 & rawImageArray[head + 1] == 216) {
+                    head += 2;
+                } else {
+                    var length = rawImageArray[head + 2] * 256 + rawImageArray[head + 3], endPoint = head + length + 2, seg = rawImageArray.slice(head, endPoint);
+                    segments.push(seg);
+                    head = endPoint;
+                }
+                if (head > rawImageArray.length) {
+                    break;
+                }
+            }
+            return segments;
+        };
+        ExifRestorer.decode64 = function(input) {
+            var output = "", chr1, chr2, chr3 = "", enc1, enc2, enc3, enc4 = "", i = 0, buf = [];
+            var base64test = /[^A-Za-z0-9\+\/\=]/g;
+            if (base64test.exec(input)) {
+                throw new Error("There were invalid base64 characters in the input text.  " + "Valid base64 characters are A-Z, a-z, 0-9, '+', '/',and '='");
+            }
+            input = input.replace(/[^A-Za-z0-9\+\/\=]/g, "");
+            do {
+                enc1 = this.KEY_STR.indexOf(input.charAt(i++));
+                enc2 = this.KEY_STR.indexOf(input.charAt(i++));
+                enc3 = this.KEY_STR.indexOf(input.charAt(i++));
+                enc4 = this.KEY_STR.indexOf(input.charAt(i++));
+                chr1 = enc1 << 2 | enc2 >> 4;
+                chr2 = (enc2 & 15) << 4 | enc3 >> 2;
+                chr3 = (enc3 & 3) << 6 | enc4;
+                buf.push(chr1);
+                if (enc3 != 64) {
+                    buf.push(chr2);
+                }
+                if (enc4 != 64) {
+                    buf.push(chr3);
+                }
+                chr1 = chr2 = chr3 = "";
+                enc1 = enc2 = enc3 = enc4 = "";
+            } while (i < input.length);
+            return buf;
+        };
+        return ExifRestorer;
+    }();
+    qq.TotalProgress = function(callback, getSize) {
+        "use strict";
+        var perFileProgress = {}, totalLoaded = 0, totalSize = 0, lastLoadedSent = -1, lastTotalSent = -1, callbackProxy = function(loaded, total) {
+            if (loaded !== lastLoadedSent || total !== lastTotalSent) {
+                callback(loaded, total);
+            }
+            lastLoadedSent = loaded;
+            lastTotalSent = total;
+        }, noRetryableFiles = function(failed, retryable) {
+            var none = true;
+            qq.each(failed, function(idx, failedId) {
+                if (qq.indexOf(retryable, failedId) >= 0) {
+                    none = false;
+                    return false;
+                }
+            });
+            return none;
+        }, onCancel = function(id) {
+            updateTotalProgress(id, -1, -1);
+            delete perFileProgress[id];
+        }, onAllComplete = function(successful, failed, retryable) {
+            if (failed.length === 0 || noRetryableFiles(failed, retryable)) {
+                callbackProxy(totalSize, totalSize);
+                this.reset();
+            }
+        }, onNew = function(id) {
+            var size = getSize(id);
+            if (size > 0) {
+                updateTotalProgress(id, 0, size);
+                perFileProgress[id] = {
+                    loaded: 0,
+                    total: size
+                };
+            }
+        }, updateTotalProgress = function(id, newLoaded, newTotal) {
+            var oldLoaded = perFileProgress[id] ? perFileProgress[id].loaded : 0, oldTotal = perFileProgress[id] ? perFileProgress[id].total : 0;
+            if (newLoaded === -1 && newTotal === -1) {
+                totalLoaded -= oldLoaded;
+                totalSize -= oldTotal;
+            } else {
+                if (newLoaded) {
+                    totalLoaded += newLoaded - oldLoaded;
+                }
+                if (newTotal) {
+                    totalSize += newTotal - oldTotal;
+                }
+            }
+            callbackProxy(totalLoaded, totalSize);
+        };
+        qq.extend(this, {
+            onAllComplete: onAllComplete,
+            onStatusChange: function(id, oldStatus, newStatus) {
+                if (newStatus === qq.status.CANCELED || newStatus === qq.status.REJECTED) {
+                    onCancel(id);
+                } else if (newStatus === qq.status.SUBMITTING) {
+                    onNew(id);
+                }
+            },
+            onIndividualProgress: function(id, loaded, total) {
+                updateTotalProgress(id, loaded, total);
+                perFileProgress[id] = {
+                    loaded: loaded,
+                    total: total
+                };
+            },
+            onNewSize: function(id) {
+                onNew(id);
+            },
+            reset: function() {
+                perFileProgress = {};
+                totalLoaded = 0;
+                totalSize = 0;
+            }
+        });
+    };
+    qq.PasteSupport = function(o) {
+        "use strict";
+        var options, detachPasteHandler;
+        options = {
+            targetElement: null,
+            callbacks: {
+                log: function(message, level) {},
+                pasteReceived: function(blob) {}
+            }
+        };
+        function isImage(item) {
+            return item.type && item.type.indexOf("image/") === 0;
+        }
+        function registerPasteHandler() {
+            detachPasteHandler = qq(options.targetElement).attach("paste", function(event) {
+                var clipboardData = event.clipboardData;
+                if (clipboardData) {
+                    qq.each(clipboardData.items, function(idx, item) {
+                        if (isImage(item)) {
+                            var blob = item.getAsFile();
+                            options.callbacks.pasteReceived(blob);
+                        }
+                    });
+                }
+            });
+        }
+        function unregisterPasteHandler() {
+            if (detachPasteHandler) {
+                detachPasteHandler();
+            }
+        }
+        qq.extend(options, o);
+        registerPasteHandler();
+        qq.extend(this, {
+            reset: function() {
+                unregisterPasteHandler();
+            }
+        });
+    };
+    qq.FormSupport = function(options, startUpload, log) {
+        "use strict";
+        var self = this, interceptSubmit = options.interceptSubmit, formEl = options.element, autoUpload = options.autoUpload;
+        qq.extend(this, {
+            newEndpoint: null,
+            newAutoUpload: autoUpload,
+            attachedToForm: false,
+            getFormInputsAsObject: function() {
+                if (formEl == null) {
+                    return null;
+                }
+                return self._form2Obj(formEl);
+            }
+        });
+        function determineNewEndpoint(formEl) {
+            if (formEl.getAttribute("action")) {
+                self.newEndpoint = formEl.getAttribute("action");
+            }
+        }
+        function validateForm(formEl, nativeSubmit) {
+            if (formEl.checkValidity && !formEl.checkValidity()) {
+                log("Form did not pass validation checks - will not upload.", "error");
+                nativeSubmit();
+            } else {
+                return true;
+            }
+        }
+        function maybeUploadOnSubmit(formEl) {
+            var nativeSubmit = formEl.submit;
+            qq(formEl).attach("submit", function(event) {
+                event = event || window.event;
+                if (event.preventDefault) {
+                    event.preventDefault();
+                } else {
+                    event.returnValue = false;
+                }
+                validateForm(formEl, nativeSubmit) && startUpload();
+            });
+            formEl.submit = function() {
+                validateForm(formEl, nativeSubmit) && startUpload();
+            };
+        }
+        function determineFormEl(formEl) {
+            if (formEl) {
+                if (qq.isString(formEl)) {
+                    formEl = document.getElementById(formEl);
+                }
+                if (formEl) {
+                    log("Attaching to form element.");
+                    determineNewEndpoint(formEl);
+                    interceptSubmit && maybeUploadOnSubmit(formEl);
+                }
+            }
+            return formEl;
+        }
+        formEl = determineFormEl(formEl);
+        this.attachedToForm = !!formEl;
+    };
+    qq.extend(qq.FormSupport.prototype, {
+        _form2Obj: function(form) {
+            "use strict";
+            var obj = {}, notIrrelevantType = function(type) {
+                var irrelevantTypes = [ "button", "image", "reset", "submit" ];
+                return qq.indexOf(irrelevantTypes, type.toLowerCase()) < 0;
+            }, radioOrCheckbox = function(type) {
+                return qq.indexOf([ "checkbox", "radio" ], type.toLowerCase()) >= 0;
+            }, ignoreValue = function(el) {
+                if (radioOrCheckbox(el.type) && !el.checked) {
+                    return true;
+                }
+                return el.disabled && el.type.toLowerCase() !== "hidden";
+            }, selectValue = function(select) {
+                var value = null;
+                qq.each(qq(select).children(), function(idx, child) {
+                    if (child.tagName.toLowerCase() === "option" && child.selected) {
+                        value = child.value;
+                        return false;
+                    }
+                });
+                return value;
+            };
+            qq.each(form.elements, function(idx, el) {
+                if ((qq.isInput(el, true) || el.tagName.toLowerCase() === "textarea") && notIrrelevantType(el.type) && !ignoreValue(el)) {
+                    obj[el.name] = el.value;
+                } else if (el.tagName.toLowerCase() === "select" && !ignoreValue(el)) {
+                    var value = selectValue(el);
+                    if (value !== null) {
+                        obj[el.name] = value;
+                    }
+                }
+            });
+            return obj;
+        }
+    });
+    qq.traditional = qq.traditional || {};
+    qq.traditional.FormUploadHandler = function(options, proxy) {
+        "use strict";
+        var handler = this, getName = proxy.getName, getUuid = proxy.getUuid, log = proxy.log;
+        function getIframeContentJson(id, iframe) {
+            var response, doc, innerHtml;
+            try {
+                doc = iframe.contentDocument || iframe.contentWindow.document;
+                innerHtml = doc.body.innerHTML;
+                log("converting iframe's innerHTML to JSON");
+                log("innerHTML = " + innerHtml);
+                if (innerHtml && innerHtml.match(/^<pre/i)) {
+                    innerHtml = doc.body.firstChild.firstChild.nodeValue;
+                }
+                response = handler._parseJsonResponse(innerHtml);
+            } catch (error) {
+                log("Error when attempting to parse form upload response (" + error.message + ")", "error");
+                response = {
+                    success: false
+                };
+            }
+            return response;
+        }
+        function createForm(id, iframe) {
+            var params = options.paramsStore.get(id), method = options.method.toLowerCase() === "get" ? "GET" : "POST", endpoint = options.endpointStore.get(id), name = getName(id);
+            params[options.uuidName] = getUuid(id);
+            params[options.filenameParam] = name;
+            return handler._initFormForUpload({
+                method: method,
+                endpoint: endpoint,
+                params: params,
+                paramsInBody: options.paramsInBody,
+                targetName: iframe.name
+            });
+        }
+        this.uploadFile = function(id) {
+            var input = handler.getInput(id), iframe = handler._createIframe(id), promise = new qq.Promise(), form;
+            form = createForm(id, iframe);
+            form.appendChild(input);
+            handler._attachLoadEvent(iframe, function(responseFromMessage) {
+                log("iframe loaded");
+                var response = responseFromMessage ? responseFromMessage : getIframeContentJson(id, iframe);
+                handler._detachLoadEvent(id);
+                if (!options.cors.expected) {
+                    qq(iframe).remove();
+                }
+                if (response.success) {
+                    promise.success(response);
+                } else {
+                    promise.failure(response);
+                }
+            });
+            log("Sending upload request for " + id);
+            form.submit();
+            qq(form).remove();
+            return promise;
+        };
+        qq.extend(this, new qq.FormUploadHandler({
+            options: {
+                isCors: options.cors.expected,
+                inputName: options.inputName
+            },
+            proxy: {
+                onCancel: options.onCancel,
+                getName: getName,
+                getUuid: getUuid,
+                log: log
+            }
+        }));
+    };
+    qq.traditional = qq.traditional || {};
+    qq.traditional.XhrUploadHandler = function(spec, proxy) {
+        "use strict";
+        var handler = this, getName = proxy.getName, getSize = proxy.getSize, getUuid = proxy.getUuid, log = proxy.log, multipart = spec.forceMultipart || spec.paramsInBody, addChunkingSpecificParams = function(id, params, chunkData) {
+            var size = getSize(id), name = getName(id);
+            params[spec.chunking.paramNames.partIndex] = chunkData.part;
+            params[spec.chunking.paramNames.partByteOffset] = chunkData.start;
+            params[spec.chunking.paramNames.chunkSize] = chunkData.size;
+            params[spec.chunking.paramNames.totalParts] = chunkData.count;
+            params[spec.totalFileSizeName] = size;
+            if (multipart) {
+                params[spec.filenameParam] = name;
+            }
+        }, allChunksDoneRequester = new qq.traditional.AllChunksDoneAjaxRequester({
+            cors: spec.cors,
+            endpoint: spec.chunking.success.endpoint,
+            log: log
+        }), createReadyStateChangedHandler = function(id, xhr) {
+            var promise = new qq.Promise();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    var result = onUploadOrChunkComplete(id, xhr);
+                    if (result.success) {
+                        promise.success(result.response, xhr);
+                    } else {
+                        promise.failure(result.response, xhr);
+                    }
+                }
+            };
+            return promise;
+        }, getChunksCompleteParams = function(id) {
+            var params = spec.paramsStore.get(id), name = getName(id), size = getSize(id);
+            params[spec.uuidName] = getUuid(id);
+            params[spec.filenameParam] = name;
+            params[spec.totalFileSizeName] = size;
+            params[spec.chunking.paramNames.totalParts] = handler._getTotalChunks(id);
+            return params;
+        }, isErrorUploadResponse = function(xhr, response) {
+            return qq.indexOf([ 200, 201, 202, 203, 204 ], xhr.status) < 0 || !response.success || response.reset;
+        }, onUploadOrChunkComplete = function(id, xhr) {
+            var response;
+            log("xhr - server response received for " + id);
+            log("responseText = " + xhr.responseText);
+            response = parseResponse(true, xhr);
+            return {
+                success: !isErrorUploadResponse(xhr, response),
+                response: response
+            };
+        }, parseResponse = function(upload, xhr) {
+            var response = {};
+            try {
+                log(qq.format("Received response status {} with body: {}", xhr.status, xhr.responseText));
+                response = qq.parseJson(xhr.responseText);
+            } catch (error) {
+                upload && log("Error when attempting to parse xhr response text (" + error.message + ")", "error");
+            }
+            return response;
+        }, sendChunksCompleteRequest = function(id) {
+            var promise = new qq.Promise();
+            allChunksDoneRequester.complete(id, handler._createXhr(id), getChunksCompleteParams(id), spec.customHeaders.get(id)).then(function(xhr) {
+                promise.success(parseResponse(false, xhr), xhr);
+            }, function(xhr) {
+                promise.failure(parseResponse(false, xhr), xhr);
+            });
+            return promise;
+        }, setParamsAndGetEntityToSend = function(params, xhr, fileOrBlob, id) {
+            var formData = new FormData(), method = spec.method, endpoint = spec.endpointStore.get(id), name = getName(id), size = getSize(id);
+            params[spec.uuidName] = getUuid(id);
+            params[spec.filenameParam] = name;
+            if (multipart) {
+                params[spec.totalFileSizeName] = size;
+            }
+            if (!spec.paramsInBody) {
+                if (!multipart) {
+                    params[spec.inputName] = name;
+                }
+                endpoint = qq.obj2url(params, endpoint);
+            }
+            xhr.open(method, endpoint, true);
+            if (spec.cors.expected && spec.cors.sendCredentials) {
+                xhr.withCredentials = true;
+            }
+            if (multipart) {
+                if (spec.paramsInBody) {
+                    qq.obj2FormData(params, formData);
+                }
+                formData.append(spec.inputName, fileOrBlob);
+                return formData;
+            }
+            return fileOrBlob;
+        }, setUploadHeaders = function(id, xhr) {
+            var extraHeaders = spec.customHeaders.get(id), fileOrBlob = handler.getFile(id);
+            xhr.setRequestHeader("Accept", "application/json");
+            xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+            xhr.setRequestHeader("Cache-Control", "no-cache");
+            if (!multipart) {
+                xhr.setRequestHeader("Content-Type", "application/octet-stream");
+                xhr.setRequestHeader("X-Mime-Type", fileOrBlob.type);
+            }
+            qq.each(extraHeaders, function(name, val) {
+                xhr.setRequestHeader(name, val);
+            });
+        };
+        qq.extend(this, {
+            uploadChunk: function(id, chunkIdx, resuming) {
+                var chunkData = handler._getChunkData(id, chunkIdx), xhr = handler._createXhr(id, chunkIdx), size = getSize(id), promise, toSend, params;
+                promise = createReadyStateChangedHandler(id, xhr);
+                handler._registerProgressHandler(id, chunkIdx, chunkData.size);
+                params = spec.paramsStore.get(id);
+                addChunkingSpecificParams(id, params, chunkData);
+                if (resuming) {
+                    params[spec.resume.paramNames.resuming] = true;
+                }
+                toSend = setParamsAndGetEntityToSend(params, xhr, chunkData.blob, id);
+                setUploadHeaders(id, xhr);
+                xhr.send(toSend);
+                return promise;
+            },
+            uploadFile: function(id) {
+                var fileOrBlob = handler.getFile(id), promise, xhr, params, toSend;
+                xhr = handler._createXhr(id);
+                handler._registerProgressHandler(id);
+                promise = createReadyStateChangedHandler(id, xhr);
+                params = spec.paramsStore.get(id);
+                toSend = setParamsAndGetEntityToSend(params, xhr, fileOrBlob, id);
+                setUploadHeaders(id, xhr);
+                xhr.send(toSend);
+                return promise;
+            }
+        });
+        qq.extend(this, new qq.XhrUploadHandler({
+            options: qq.extend({
+                namespace: "traditional"
+            }, spec),
+            proxy: qq.extend({
+                getEndpoint: spec.endpointStore.get
+            }, proxy)
+        }));
+        qq.override(this, function(super_) {
+            return {
+                finalizeChunks: function(id) {
+                    if (spec.chunking.success.endpoint) {
+                        return sendChunksCompleteRequest(id);
+                    } else {
+                        return super_.finalizeChunks(id, qq.bind(parseResponse, this, true));
+                    }
+                }
+            };
+        });
+    };
+    qq.traditional.AllChunksDoneAjaxRequester = function(o) {
+        "use strict";
+        var requester, method = "POST", options = {
+            cors: {
+                allowXdr: false,
+                expected: false,
+                sendCredentials: false
+            },
+            endpoint: null,
+            log: function(str, level) {}
+        }, promises = {}, endpointHandler = {
+            get: function(id) {
+                return options.endpoint;
+            }
+        };
+        qq.extend(options, o);
+        requester = qq.extend(this, new qq.AjaxRequester({
+            acceptHeader: "application/json",
+            validMethods: [ method ],
+            method: method,
+            endpointStore: endpointHandler,
+            allowXRequestedWithAndCacheControl: false,
+            cors: options.cors,
+            log: options.log,
+            onComplete: function(id, xhr, isError) {
+                var promise = promises[id];
+                delete promises[id];
+                if (isError) {
+                    promise.failure(xhr);
+                } else {
+                    promise.success(xhr);
+                }
+            }
+        }));
+        qq.extend(this, {
+            complete: function(id, xhr, params, headers) {
+                var promise = new qq.Promise();
+                options.log("Submitting All Chunks Done request for " + id);
+                promises[id] = promise;
+                requester.initTransport(id).withParams(params).withHeaders(headers).send(xhr);
+                return promise;
+            }
+        });
+    };
+    qq.DragAndDrop = function(o) {
+        "use strict";
+        var options, HIDE_ZONES_EVENT_NAME = "qq-hidezones", HIDE_BEFORE_ENTER_ATTR = "qq-hide-dropzone", uploadDropZones = [], droppedFiles = [], disposeSupport = new qq.DisposeSupport();
+        options = {
+            dropZoneElements: [],
+            allowMultipleItems: true,
+            classes: {
+                dropActive: null
+            },
+            callbacks: new qq.DragAndDrop.callbacks()
+        };
+        qq.extend(options, o, true);
+        function uploadDroppedFiles(files, uploadDropZone) {
+            var filesAsArray = Array.prototype.slice.call(files);
+            options.callbacks.dropLog("Grabbed " + files.length + " dropped files.");
+            uploadDropZone.dropDisabled(false);
+            options.callbacks.processingDroppedFilesComplete(filesAsArray, uploadDropZone.getElement());
+        }
+        function traverseFileTree(entry) {
+            var parseEntryPromise = new qq.Promise();
+            if (entry.isFile) {
+                entry.file(function(file) {
+                    var name = entry.name, fullPath = entry.fullPath, indexOfNameInFullPath = fullPath.indexOf(name);
+                    fullPath = fullPath.substr(0, indexOfNameInFullPath);
+                    if (fullPath.charAt(0) === "/") {
+                        fullPath = fullPath.substr(1);
+                    }
+                    file.qqPath = fullPath;
+                    droppedFiles.push(file);
+                    parseEntryPromise.success();
+                }, function(fileError) {
+                    options.callbacks.dropLog("Problem parsing '" + entry.fullPath + "'.  FileError code " + fileError.code + ".", "error");
+                    parseEntryPromise.failure();
+                });
+            } else if (entry.isDirectory) {
+                getFilesInDirectory(entry).then(function allEntriesRead(entries) {
+                    var entriesLeft = entries.length;
+                    qq.each(entries, function(idx, entry) {
+                        traverseFileTree(entry).done(function() {
+                            entriesLeft -= 1;
+                            if (entriesLeft === 0) {
+                                parseEntryPromise.success();
+                            }
+                        });
+                    });
+                    if (!entries.length) {
+                        parseEntryPromise.success();
+                    }
+                }, function readFailure(fileError) {
+                    options.callbacks.dropLog("Problem parsing '" + entry.fullPath + "'.  FileError code " + fileError.code + ".", "error");
+                    parseEntryPromise.failure();
+                });
+            }
+            return parseEntryPromise;
+        }
+        function getFilesInDirectory(entry, reader, accumEntries, existingPromise) {
+            var promise = existingPromise || new qq.Promise(), dirReader = reader || entry.createReader();
+            dirReader.readEntries(function readSuccess(entries) {
+                var newEntries = accumEntries ? accumEntries.concat(entries) : entries;
+                if (entries.length) {
+                    setTimeout(function() {
+                        getFilesInDirectory(entry, dirReader, newEntries, promise);
+                    }, 0);
+                } else {
+                    promise.success(newEntries);
+                }
+            }, promise.failure);
+            return promise;
+        }
+        function handleDataTransfer(dataTransfer, uploadDropZone) {
+            var pendingFolderPromises = [], handleDataTransferPromise = new qq.Promise();
+            options.callbacks.processingDroppedFiles();
+            uploadDropZone.dropDisabled(true);
+            if (dataTransfer.files.length > 1 && !options.allowMultipleItems) {
+                options.callbacks.processingDroppedFilesComplete([]);
+                options.callbacks.dropError("tooManyFilesError", "");
+                uploadDropZone.dropDisabled(false);
+                handleDataTransferPromise.failure();
+            } else {
+                droppedFiles = [];
+                if (qq.isFolderDropSupported(dataTransfer)) {
+                    qq.each(dataTransfer.items, function(idx, item) {
+                        var entry = item.webkitGetAsEntry();
+                        if (entry) {
+                            if (entry.isFile) {
+                                droppedFiles.push(item.getAsFile());
+                            } else {
+                                pendingFolderPromises.push(traverseFileTree(entry).done(function() {
+                                    pendingFolderPromises.pop();
+                                    if (pendingFolderPromises.length === 0) {
+                                        handleDataTransferPromise.success();
+                                    }
+                                }));
+                            }
+                        }
+                    });
+                } else {
+                    droppedFiles = dataTransfer.files;
+                }
+                if (pendingFolderPromises.length === 0) {
+                    handleDataTransferPromise.success();
+                }
+            }
+            return handleDataTransferPromise;
+        }
+        function setupDropzone(dropArea) {
+            var dropZone = new qq.UploadDropZone({
+                HIDE_ZONES_EVENT_NAME: HIDE_ZONES_EVENT_NAME,
+                element: dropArea,
+                onEnter: function(e) {
+                    qq(dropArea).addClass(options.classes.dropActive);
+                    e.stopPropagation();
+                },
+                onLeaveNotDescendants: function(e) {
+                    qq(dropArea).removeClass(options.classes.dropActive);
+                },
+                onDrop: function(e) {
+                    handleDataTransfer(e.dataTransfer, dropZone).then(function() {
+                        uploadDroppedFiles(droppedFiles, dropZone);
+                    }, function() {
+                        options.callbacks.dropLog("Drop event DataTransfer parsing failed.  No files will be uploaded.", "error");
+                    });
+                }
+            });
+            disposeSupport.addDisposer(function() {
+                dropZone.dispose();
+            });
+            qq(dropArea).hasAttribute(HIDE_BEFORE_ENTER_ATTR) && qq(dropArea).hide();
+            uploadDropZones.push(dropZone);
+            return dropZone;
+        }
+        function isFileDrag(dragEvent) {
+            var fileDrag;
+            qq.each(dragEvent.dataTransfer.types, function(key, val) {
+                if (val === "Files") {
+                    fileDrag = true;
+                    return false;
+                }
+            });
+            return fileDrag;
+        }
+        function leavingDocumentOut(e) {
+            if (qq.firefox()) {
+                return !e.relatedTarget;
+            }
+            if (qq.safari()) {
+                return e.x < 0 || e.y < 0;
+            }
+            return e.x === 0 && e.y === 0;
+        }
+        function setupDragDrop() {
+            var dropZones = options.dropZoneElements, maybeHideDropZones = function() {
+                setTimeout(function() {
+                    qq.each(dropZones, function(idx, dropZone) {
+                        qq(dropZone).hasAttribute(HIDE_BEFORE_ENTER_ATTR) && qq(dropZone).hide();
+                        qq(dropZone).removeClass(options.classes.dropActive);
+                    });
+                }, 10);
+            };
+            qq.each(dropZones, function(idx, dropZone) {
+                var uploadDropZone = setupDropzone(dropZone);
+                if (dropZones.length && qq.supportedFeatures.fileDrop) {
+                    disposeSupport.attach(document, "dragenter", function(e) {
+                        if (!uploadDropZone.dropDisabled() && isFileDrag(e)) {
+                            qq.each(dropZones, function(idx, dropZone) {
+                                if (dropZone instanceof HTMLElement && qq(dropZone).hasAttribute(HIDE_BEFORE_ENTER_ATTR)) {
+                                    qq(dropZone).css({
+                                        display: "block"
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+            disposeSupport.attach(document, "dragleave", function(e) {
+                if (leavingDocumentOut(e)) {
+                    maybeHideDropZones();
+                }
+            });
+            disposeSupport.attach(qq(document).children()[0], "mouseenter", function(e) {
+                maybeHideDropZones();
+            });
+            disposeSupport.attach(document, "drop", function(e) {
+                e.preventDefault();
+                maybeHideDropZones();
+            });
+            disposeSupport.attach(document, HIDE_ZONES_EVENT_NAME, maybeHideDropZones);
+        }
+        setupDragDrop();
+        qq.extend(this, {
+            setupExtraDropzone: function(element) {
+                options.dropZoneElements.push(element);
+                setupDropzone(element);
+            },
+            removeDropzone: function(element) {
+                var i, dzs = options.dropZoneElements;
+                for (i in dzs) {
+                    if (dzs[i] === element) {
+                        return dzs.splice(i, 1);
+                    }
+                }
+            },
+            dispose: function() {
+                disposeSupport.dispose();
+                qq.each(uploadDropZones, function(idx, dropZone) {
+                    dropZone.dispose();
+                });
+            }
+        });
+    };
+    qq.DragAndDrop.callbacks = function() {
+        "use strict";
+        return {
+            processingDroppedFiles: function() {},
+            processingDroppedFilesComplete: function(files, targetEl) {},
+            dropError: function(code, errorSpecifics) {
+                qq.log("Drag & drop error code '" + code + " with these specifics: '" + errorSpecifics + "'", "error");
+            },
+            dropLog: function(message, level) {
+                qq.log(message, level);
+            }
+        };
+    };
+    qq.UploadDropZone = function(o) {
+        "use strict";
+        var disposeSupport = new qq.DisposeSupport(), options, element, preventDrop, dropOutsideDisabled;
+        options = {
+            element: null,
+            onEnter: function(e) {},
+            onLeave: function(e) {},
+            onLeaveNotDescendants: function(e) {},
+            onDrop: function(e) {}
+        };
+        qq.extend(options, o);
+        element = options.element;
+        function dragoverShouldBeCanceled() {
+            return qq.safari() || qq.firefox() && qq.windows();
+        }
+        function disableDropOutside(e) {
+            if (!dropOutsideDisabled) {
+                if (dragoverShouldBeCanceled) {
+                    disposeSupport.attach(document, "dragover", function(e) {
+                        e.preventDefault();
+                    });
+                } else {
+                    disposeSupport.attach(document, "dragover", function(e) {
+                        if (e.dataTransfer) {
+                            e.dataTransfer.dropEffect = "none";
+                            e.preventDefault();
+                        }
+                    });
+                }
+                dropOutsideDisabled = true;
+            }
+        }
+        function isValidFileDrag(e) {
+            if (!qq.supportedFeatures.fileDrop) {
+                return false;
+            }
+            var effectTest, dt = e.dataTransfer, isSafari = qq.safari();
+            effectTest = qq.ie() && qq.supportedFeatures.fileDrop ? true : dt.effectAllowed !== "none";
+            return dt && effectTest && (dt.files || !isSafari && dt.types.contains && dt.types.contains("Files"));
+        }
+        function isOrSetDropDisabled(isDisabled) {
+            if (isDisabled !== undefined) {
+                preventDrop = isDisabled;
+            }
+            return preventDrop;
+        }
+        function triggerHidezonesEvent() {
+            var hideZonesEvent;
+            function triggerUsingOldApi() {
+                hideZonesEvent = document.createEvent("Event");
+                hideZonesEvent.initEvent(options.HIDE_ZONES_EVENT_NAME, true, true);
+            }
+            if (window.CustomEvent) {
+                try {
+                    hideZonesEvent = new CustomEvent(options.HIDE_ZONES_EVENT_NAME);
+                } catch (err) {
+                    triggerUsingOldApi();
+                }
+            } else {
+                triggerUsingOldApi();
+            }
+            document.dispatchEvent(hideZonesEvent);
+        }
+        function attachEvents() {
+            disposeSupport.attach(element, "dragover", function(e) {
+                if (!isValidFileDrag(e)) {
+                    return;
+                }
+                var effect = qq.ie() && qq.supportedFeatures.fileDrop ? null : e.dataTransfer.effectAllowed;
+                if (effect === "move" || effect === "linkMove") {
+                    e.dataTransfer.dropEffect = "move";
+                } else {
+                    e.dataTransfer.dropEffect = "copy";
+                }
+                e.stopPropagation();
+                e.preventDefault();
+            });
+            disposeSupport.attach(element, "dragenter", function(e) {
+                if (!isOrSetDropDisabled()) {
+                    if (!isValidFileDrag(e)) {
+                        return;
+                    }
+                    options.onEnter(e);
+                }
+            });
+            disposeSupport.attach(element, "dragleave", function(e) {
+                if (!isValidFileDrag(e)) {
+                    return;
+                }
+                options.onLeave(e);
+                var relatedTarget = document.elementFromPoint(e.clientX, e.clientY);
+                if (qq(this).contains(relatedTarget)) {
+                    return;
+                }
+                options.onLeaveNotDescendants(e);
+            });
+            disposeSupport.attach(element, "drop", function(e) {
+                if (!isOrSetDropDisabled()) {
+                    if (!isValidFileDrag(e)) {
+                        return;
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    options.onDrop(e);
+                    triggerHidezonesEvent();
+                }
+            });
+        }
+        disableDropOutside();
+        attachEvents();
+        qq.extend(this, {
+            dropDisabled: function(isDisabled) {
+                return isOrSetDropDisabled(isDisabled);
+            },
+            dispose: function() {
+                disposeSupport.dispose();
+            },
+            getElement: function() {
+                return element;
+            }
+        });
+    };
+    (function() {
+        "use strict";
+        qq.uiPublicApi = {
+            addInitialFiles: function(cannedFileList) {
+                this._parent.prototype.addInitialFiles.apply(this, arguments);
+                this._templating.addCacheToDom();
+            },
+            clearStoredFiles: function() {
+                this._parent.prototype.clearStoredFiles.apply(this, arguments);
+                this._templating.clearFiles();
+            },
+            addExtraDropzone: function(element) {
+                this._dnd && this._dnd.setupExtraDropzone(element);
+            },
+            removeExtraDropzone: function(element) {
+                if (this._dnd) {
+                    return this._dnd.removeDropzone(element);
+                }
+            },
+            getItemByFileId: function(id) {
+                if (!this._templating.isHiddenForever(id)) {
+                    return this._templating.getFileContainer(id);
+                }
+            },
+            reset: function() {
+                this._parent.prototype.reset.apply(this, arguments);
+                this._templating.reset();
+                if (!this._options.button && this._templating.getButton()) {
+                    this._defaultButtonId = this._createUploadButton({
+                        element: this._templating.getButton(),
+                        title: this._options.text.fileInputTitle
+                    }).getButtonId();
+                }
+                if (this._dnd) {
+                    this._dnd.dispose();
+                    this._dnd = this._setupDragAndDrop();
+                }
+                this._totalFilesInBatch = 0;
+                this._filesInBatchAddedToUi = 0;
+                this._setupClickAndEditEventHandlers();
+            },
+            setName: function(id, newName) {
+                var formattedFilename = this._options.formatFileName(newName);
+                this._parent.prototype.setName.apply(this, arguments);
+                this._templating.updateFilename(id, formattedFilename);
+            },
+            pauseUpload: function(id) {
+                var paused = this._parent.prototype.pauseUpload.apply(this, arguments);
+                paused && this._templating.uploadPaused(id);
+                return paused;
+            },
+            continueUpload: function(id) {
+                var continued = this._parent.prototype.continueUpload.apply(this, arguments);
+                continued && this._templating.uploadContinued(id);
+                return continued;
+            },
+            getId: function(fileContainerOrChildEl) {
+                return this._templating.getFileId(fileContainerOrChildEl);
+            },
+            getDropTarget: function(fileId) {
+                var file = this.getFile(fileId);
+                return file.qqDropTarget;
+            }
+        };
+        qq.uiPrivateApi = {
+            _getButton: function(buttonId) {
+                var button = this._parent.prototype._getButton.apply(this, arguments);
+                if (!button) {
+                    if (buttonId === this._defaultButtonId) {
+                        button = this._templating.getButton();
+                    }
+                }
+                return button;
+            },
+            _removeFileItem: function(fileId) {
+                this._templating.removeFile(fileId);
+            },
+            _setupClickAndEditEventHandlers: function() {
+                this._fileButtonsClickHandler = qq.FileButtonsClickHandler && this._bindFileButtonsClickEvent();
+                this._focusinEventSupported = !qq.firefox();
+                if (this._isEditFilenameEnabled()) {
+                    this._filenameClickHandler = this._bindFilenameClickEvent();
+                    this._filenameInputFocusInHandler = this._bindFilenameInputFocusInEvent();
+                    this._filenameInputFocusHandler = this._bindFilenameInputFocusEvent();
+                }
+            },
+            _setupDragAndDrop: function() {
+                var self = this, dropZoneElements = this._options.dragAndDrop.extraDropzones, templating = this._templating, defaultDropZone = templating.getDropZone();
+                defaultDropZone && dropZoneElements.push(defaultDropZone);
+                return new qq.DragAndDrop({
+                    dropZoneElements: dropZoneElements,
+                    allowMultipleItems: this._options.multiple,
+                    classes: {
+                        dropActive: this._options.classes.dropActive
+                    },
+                    callbacks: {
+                        processingDroppedFiles: function() {
+                            templating.showDropProcessing();
+                        },
+                        processingDroppedFilesComplete: function(files, targetEl) {
+                            templating.hideDropProcessing();
+                            qq.each(files, function(idx, file) {
+                                file.qqDropTarget = targetEl;
+                            });
+                            if (files.length) {
+                                self.addFiles(files, null, null);
+                            }
+                        },
+                        dropError: function(code, errorData) {
+                            self._itemError(code, errorData);
+                        },
+                        dropLog: function(message, level) {
+                            self.log(message, level);
+                        }
+                    }
+                });
+            },
+            _bindFileButtonsClickEvent: function() {
+                var self = this;
+                return new qq.FileButtonsClickHandler({
+                    templating: this._templating,
+                    log: function(message, lvl) {
+                        self.log(message, lvl);
+                    },
+                    onDeleteFile: function(fileId) {
+                        self.deleteFile(fileId);
+                    },
+                    onCancel: function(fileId) {
+                        self.cancel(fileId);
+                    },
+                    onRetry: function(fileId) {
+                        self.retry(fileId);
+                    },
+                    onPause: function(fileId) {
+                        self.pauseUpload(fileId);
+                    },
+                    onContinue: function(fileId) {
+                        self.continueUpload(fileId);
+                    },
+                    onGetName: function(fileId) {
+                        return self.getName(fileId);
+                    }
+                });
+            },
+            _isEditFilenameEnabled: function() {
+                return this._templating.isEditFilenamePossible() && !this._options.autoUpload && qq.FilenameClickHandler && qq.FilenameInputFocusHandler && qq.FilenameInputFocusHandler;
+            },
+            _filenameEditHandler: function() {
+                var self = this, templating = this._templating;
+                return {
+                    templating: templating,
+                    log: function(message, lvl) {
+                        self.log(message, lvl);
+                    },
+                    onGetUploadStatus: function(fileId) {
+                        return self.getUploads({
+                            id: fileId
+                        }).status;
+                    },
+                    onGetName: function(fileId) {
+                        return self.getName(fileId);
+                    },
+                    onSetName: function(id, newName) {
+                        self.setName(id, newName);
+                    },
+                    onEditingStatusChange: function(id, isEditing) {
+                        var qqInput = qq(templating.getEditInput(id)), qqFileContainer = qq(templating.getFileContainer(id));
+                        if (isEditing) {
+                            qqInput.addClass("qq-editing");
+                            templating.hideFilename(id);
+                            templating.hideEditIcon(id);
+                        } else {
+                            qqInput.removeClass("qq-editing");
+                            templating.showFilename(id);
+                            templating.showEditIcon(id);
+                        }
+                        qqFileContainer.addClass("qq-temp").removeClass("qq-temp");
+                    }
+                };
+            },
+            _onUploadStatusChange: function(id, oldStatus, newStatus) {
+                this._parent.prototype._onUploadStatusChange.apply(this, arguments);
+                if (this._isEditFilenameEnabled()) {
+                    if (this._templating.getFileContainer(id) && newStatus !== qq.status.SUBMITTED) {
+                        this._templating.markFilenameEditable(id);
+                        this._templating.hideEditIcon(id);
+                    }
+                }
+                if (oldStatus === qq.status.UPLOAD_RETRYING && newStatus === qq.status.UPLOADING) {
+                    this._templating.hideRetry(id);
+                    this._templating.setStatusText(id);
+                    qq(this._templating.getFileContainer(id)).removeClass(this._classes.retrying);
+                } else if (newStatus === qq.status.UPLOAD_FAILED) {
+                    this._templating.hidePause(id);
+                }
+            },
+            _bindFilenameInputFocusInEvent: function() {
+                var spec = qq.extend({}, this._filenameEditHandler());
+                return new qq.FilenameInputFocusInHandler(spec);
+            },
+            _bindFilenameInputFocusEvent: function() {
+                var spec = qq.extend({}, this._filenameEditHandler());
+                return new qq.FilenameInputFocusHandler(spec);
+            },
+            _bindFilenameClickEvent: function() {
+                var spec = qq.extend({}, this._filenameEditHandler());
+                return new qq.FilenameClickHandler(spec);
+            },
+            _storeForLater: function(id) {
+                this._parent.prototype._storeForLater.apply(this, arguments);
+                this._templating.hideSpinner(id);
+            },
+            _onAllComplete: function(successful, failed) {
+                this._parent.prototype._onAllComplete.apply(this, arguments);
+                this._templating.resetTotalProgress();
+            },
+            _onSubmit: function(id, name) {
+                var file = this.getFile(id);
+                if (file && file.qqPath && this._options.dragAndDrop.reportDirectoryPaths) {
+                    this._paramsStore.addReadOnly(id, {
+                        qqpath: file.qqPath
+                    });
+                }
+                this._parent.prototype._onSubmit.apply(this, arguments);
+                this._addToList(id, name);
+            },
+            _onSubmitted: function(id) {
+                if (this._isEditFilenameEnabled()) {
+                    this._templating.markFilenameEditable(id);
+                    this._templating.showEditIcon(id);
+                    if (!this._focusinEventSupported) {
+                        this._filenameInputFocusHandler.addHandler(this._templating.getEditInput(id));
+                    }
+                }
+            },
+            _onProgress: function(id, name, loaded, total) {
+                this._parent.prototype._onProgress.apply(this, arguments);
+                this._templating.updateProgress(id, loaded, total);
+                if (total === 0 || Math.round(loaded / total * 100) === 100) {
+                    this._templating.hideCancel(id);
+                    this._templating.hidePause(id);
+                    this._templating.hideProgress(id);
+                    this._templating.setStatusText(id, this._options.text.waitingForResponse);
+                    this._displayFileSize(id);
+                } else {
+                    this._displayFileSize(id, loaded, total);
+                }
+            },
+            _onTotalProgress: function(loaded, total) {
+                this._parent.prototype._onTotalProgress.apply(this, arguments);
+                this._templating.updateTotalProgress(loaded, total);
+            },
+            _onComplete: function(id, name, result, xhr) {
+                var parentRetVal = this._parent.prototype._onComplete.apply(this, arguments), templating = this._templating, fileContainer = templating.getFileContainer(id), self = this;
+                function completeUpload(result) {
+                    if (!fileContainer) {
+                        return;
+                    }
+                    templating.setStatusText(id);
+                    qq(fileContainer).removeClass(self._classes.retrying);
+                    templating.hideProgress(id);
+                    if (self.getUploads({
+                        id: id
+                    }).status !== qq.status.UPLOAD_FAILED) {
+                        templating.hideCancel(id);
+                    }
+                    templating.hideSpinner(id);
+                    if (result.success) {
+                        self._markFileAsSuccessful(id);
+                    } else {
+                        qq(fileContainer).addClass(self._classes.fail);
+                        templating.showCancel(id);
+                        if (templating.isRetryPossible() && !self._preventRetries[id]) {
+                            qq(fileContainer).addClass(self._classes.retryable);
+                            templating.showRetry(id);
+                        }
+                        self._controlFailureTextDisplay(id, result);
+                    }
+                }
+                if (parentRetVal instanceof qq.Promise) {
+                    parentRetVal.done(function(newResult) {
+                        completeUpload(newResult);
+                    });
+                } else {
+                    completeUpload(result);
+                }
+                return parentRetVal;
+            },
+            _markFileAsSuccessful: function(id) {
+                var templating = this._templating;
+                if (this._isDeletePossible()) {
+                    templating.showDeleteButton(id);
+                }
+                qq(templating.getFileContainer(id)).addClass(this._classes.success);
+                this._maybeUpdateThumbnail(id);
+            },
+            _onUploadPrep: function(id) {
+                this._parent.prototype._onUploadPrep.apply(this, arguments);
+                this._templating.showSpinner(id);
+            },
+            _onUpload: function(id, name) {
+                var parentRetVal = this._parent.prototype._onUpload.apply(this, arguments);
+                this._templating.showSpinner(id);
+                return parentRetVal;
+            },
+            _onUploadChunk: function(id, chunkData) {
+                this._parent.prototype._onUploadChunk.apply(this, arguments);
+                if (chunkData.partIndex > 0 && this._handler.isResumable(id)) {
+                    this._templating.allowPause(id);
+                }
+            },
+            _onCancel: function(id, name) {
+                this._parent.prototype._onCancel.apply(this, arguments);
+                this._removeFileItem(id);
+                if (this._getNotFinished() === 0) {
+                    this._templating.resetTotalProgress();
+                }
+            },
+            _onBeforeAutoRetry: function(id) {
+                var retryNumForDisplay, maxAuto, retryNote;
+                this._parent.prototype._onBeforeAutoRetry.apply(this, arguments);
+                this._showCancelLink(id);
+                if (this._options.retry.showAutoRetryNote) {
+                    retryNumForDisplay = this._autoRetries[id];
+                    maxAuto = this._options.retry.maxAutoAttempts;
+                    retryNote = this._options.retry.autoRetryNote.replace(/\{retryNum\}/g, retryNumForDisplay);
+                    retryNote = retryNote.replace(/\{maxAuto\}/g, maxAuto);
+                    this._templating.setStatusText(id, retryNote);
+                    qq(this._templating.getFileContainer(id)).addClass(this._classes.retrying);
+                }
+            },
+            _onBeforeManualRetry: function(id) {
+                if (this._parent.prototype._onBeforeManualRetry.apply(this, arguments)) {
+                    this._templating.resetProgress(id);
+                    qq(this._templating.getFileContainer(id)).removeClass(this._classes.fail);
+                    this._templating.setStatusText(id);
+                    this._templating.showSpinner(id);
+                    this._showCancelLink(id);
+                    return true;
+                } else {
+                    qq(this._templating.getFileContainer(id)).addClass(this._classes.retryable);
+                    this._templating.showRetry(id);
+                    return false;
+                }
+            },
+            _onSubmitDelete: function(id) {
+                var onSuccessCallback = qq.bind(this._onSubmitDeleteSuccess, this);
+                this._parent.prototype._onSubmitDelete.call(this, id, onSuccessCallback);
+            },
+            _onSubmitDeleteSuccess: function(id, uuid, additionalMandatedParams) {
+                if (this._options.deleteFile.forceConfirm) {
+                    this._showDeleteConfirm.apply(this, arguments);
+                } else {
+                    this._sendDeleteRequest.apply(this, arguments);
+                }
+            },
+            _onDeleteComplete: function(id, xhr, isError) {
+                this._parent.prototype._onDeleteComplete.apply(this, arguments);
+                this._templating.hideSpinner(id);
+                if (isError) {
+                    this._templating.setStatusText(id, this._options.deleteFile.deletingFailedText);
+                    this._templating.showDeleteButton(id);
+                } else {
+                    this._removeFileItem(id);
+                }
+            },
+            _sendDeleteRequest: function(id, uuid, additionalMandatedParams) {
+                this._templating.hideDeleteButton(id);
+                this._templating.showSpinner(id);
+                this._templating.setStatusText(id, this._options.deleteFile.deletingStatusText);
+                this._deleteHandler.sendDelete.apply(this, arguments);
+            },
+            _showDeleteConfirm: function(id, uuid, mandatedParams) {
+                var fileName = this.getName(id), confirmMessage = this._options.deleteFile.confirmMessage.replace(/\{filename\}/g, fileName), uuid = this.getUuid(id), deleteRequestArgs = arguments, self = this, retVal;
+                retVal = this._options.showConfirm(confirmMessage);
+                if (qq.isGenericPromise(retVal)) {
+                    retVal.then(function() {
+                        self._sendDeleteRequest.apply(self, deleteRequestArgs);
+                    });
+                } else if (retVal !== false) {
+                    self._sendDeleteRequest.apply(self, deleteRequestArgs);
+                }
+            },
+            _addToList: function(id, name, canned) {
+                var prependData, prependIndex = 0, dontDisplay = this._handler.isProxied(id) && this._options.scaling.hideScaled, record;
+                if (this._options.display.prependFiles) {
+                    if (this._totalFilesInBatch > 1 && this._filesInBatchAddedToUi > 0) {
+                        prependIndex = this._filesInBatchAddedToUi - 1;
+                    }
+                    prependData = {
+                        index: prependIndex
+                    };
+                }
+                if (!canned) {
+                    if (this._options.disableCancelForFormUploads && !qq.supportedFeatures.ajaxUploading) {
+                        this._templating.disableCancel();
+                    }
+                    if (!this._options.multiple) {
+                        record = this.getUploads({
+                            id: id
+                        });
+                        this._handledProxyGroup = this._handledProxyGroup || record.proxyGroupId;
+                        if (record.proxyGroupId !== this._handledProxyGroup || !record.proxyGroupId) {
+                            this._handler.cancelAll();
+                            this._clearList();
+                            this._handledProxyGroup = null;
+                        }
+                    }
+                }
+                if (canned) {
+                    this._templating.addFileToCache(id, this._options.formatFileName(name), prependData, dontDisplay);
+                    this._templating.updateThumbnail(id, this._thumbnailUrls[id], true, this._options.thumbnails.customResizer);
+                } else {
+                    this._templating.addFile(id, this._options.formatFileName(name), prependData, dontDisplay);
+                    this._templating.generatePreview(id, this.getFile(id), this._options.thumbnails.customResizer);
+                }
+                this._filesInBatchAddedToUi += 1;
+                if (canned || this._options.display.fileSizeOnSubmit && qq.supportedFeatures.ajaxUploading) {
+                    this._displayFileSize(id);
+                }
+            },
+            _clearList: function() {
+                this._templating.clearFiles();
+                this.clearStoredFiles();
+            },
+            _displayFileSize: function(id, loadedSize, totalSize) {
+                var size = this.getSize(id), sizeForDisplay = this._formatSize(size);
+                if (size >= 0) {
+                    if (loadedSize !== undefined && totalSize !== undefined) {
+                        sizeForDisplay = this._formatProgress(loadedSize, totalSize);
+                    }
+                    this._templating.updateSize(id, sizeForDisplay);
+                }
+            },
+            _formatProgress: function(uploadedSize, totalSize) {
+                var message = this._options.text.formatProgress;
+                function r(name, replacement) {
+                    message = message.replace(name, replacement);
+                }
+                r("{percent}", Math.round(uploadedSize / totalSize * 100));
+                r("{total_size}", this._formatSize(totalSize));
+                return message;
+            },
+            _controlFailureTextDisplay: function(id, response) {
+                var mode, responseProperty, failureReason;
+                mode = this._options.failedUploadTextDisplay.mode;
+                responseProperty = this._options.failedUploadTextDisplay.responseProperty;
+                if (mode === "custom") {
+                    failureReason = response[responseProperty];
+                    if (!failureReason) {
+                        failureReason = this._options.text.failUpload;
+                    }
+                    this._templating.setStatusText(id, failureReason);
+                    if (this._options.failedUploadTextDisplay.enableTooltip) {
+                        this._showTooltip(id, failureReason);
+                    }
+                } else if (mode === "default") {
+                    this._templating.setStatusText(id, this._options.text.failUpload);
+                } else if (mode !== "none") {
+                    this.log("failedUploadTextDisplay.mode value of '" + mode + "' is not valid", "warn");
+                }
+            },
+            _showTooltip: function(id, text) {
+                this._templating.getFileContainer(id).title = text;
+            },
+            _showCancelLink: function(id) {
+                if (!this._options.disableCancelForFormUploads || qq.supportedFeatures.ajaxUploading) {
+                    this._templating.showCancel(id);
+                }
+            },
+            _itemError: function(code, name, item) {
+                var message = this._parent.prototype._itemError.apply(this, arguments);
+                this._options.showMessage(message);
+            },
+            _batchError: function(message) {
+                this._parent.prototype._batchError.apply(this, arguments);
+                this._options.showMessage(message);
+            },
+            _setupPastePrompt: function() {
+                var self = this;
+                this._options.callbacks.onPasteReceived = function() {
+                    var message = self._options.paste.namePromptMessage, defaultVal = self._options.paste.defaultName;
+                    return self._options.showPrompt(message, defaultVal);
+                };
+            },
+            _fileOrBlobRejected: function(id, name) {
+                this._totalFilesInBatch -= 1;
+                this._parent.prototype._fileOrBlobRejected.apply(this, arguments);
+            },
+            _prepareItemsForUpload: function(items, params, endpoint) {
+                this._totalFilesInBatch = items.length;
+                this._filesInBatchAddedToUi = 0;
+                this._parent.prototype._prepareItemsForUpload.apply(this, arguments);
+            },
+            _maybeUpdateThumbnail: function(fileId) {
+                var thumbnailUrl = this._thumbnailUrls[fileId], fileStatus = this.getUploads({
+                    id: fileId
+                }).status;
+                if (fileStatus !== qq.status.DELETED && (thumbnailUrl || this._options.thumbnails.placeholders.waitUntilResponse || !qq.supportedFeatures.imagePreviews)) {
+                    this._templating.updateThumbnail(fileId, thumbnailUrl, this._options.thumbnails.customResizer);
+                }
+            },
+            _addCannedFile: function(sessionData) {
+                var id = this._parent.prototype._addCannedFile.apply(this, arguments);
+                this._addToList(id, this.getName(id), true);
+                this._templating.hideSpinner(id);
+                this._templating.hideCancel(id);
+                this._markFileAsSuccessful(id);
+                return id;
+            },
+            _setSize: function(id, newSize) {
+                this._parent.prototype._setSize.apply(this, arguments);
+                this._templating.updateSize(id, this._formatSize(newSize));
+            },
+            _sessionRequestComplete: function() {
+                this._templating.addCacheToDom();
+                this._parent.prototype._sessionRequestComplete.apply(this, arguments);
+            }
+        };
+    })();
+    qq.FineUploader = function(o, namespace) {
+        "use strict";
+        var self = this;
+        this._parent = namespace ? qq[namespace].FineUploaderBasic : qq.FineUploaderBasic;
+        this._parent.apply(this, arguments);
+        qq.extend(this._options, {
+            element: null,
+            button: null,
+            listElement: null,
+            dragAndDrop: {
+                extraDropzones: [],
+                reportDirectoryPaths: false
+            },
+            text: {
+                formatProgress: "{percent}% of {total_size}",
+                failUpload: "Upload failed",
+                waitingForResponse: "Processing...",
+                paused: "Paused"
+            },
+            template: "qq-template",
+            classes: {
+                retrying: "qq-upload-retrying",
+                retryable: "qq-upload-retryable",
+                success: "qq-upload-success",
+                fail: "qq-upload-fail",
+                editable: "qq-editable",
+                hide: "qq-hide",
+                dropActive: "qq-upload-drop-area-active"
+            },
+            failedUploadTextDisplay: {
+                mode: "default",
+                responseProperty: "error",
+                enableTooltip: true
+            },
+            messages: {
+                tooManyFilesError: "You may only drop one file",
+                unsupportedBrowser: "Unrecoverable error - this browser does not permit file uploading of any kind."
+            },
+            retry: {
+                showAutoRetryNote: true,
+                autoRetryNote: "Retrying {retryNum}/{maxAuto}..."
+            },
+            deleteFile: {
+                forceConfirm: false,
+                confirmMessage: "Are you sure you want to delete {filename}?",
+                deletingStatusText: "Deleting...",
+                deletingFailedText: "Delete failed"
+            },
+            display: {
+                fileSizeOnSubmit: false,
+                prependFiles: false
+            },
+            paste: {
+                promptForName: false,
+                namePromptMessage: "Please name this image"
+            },
+            thumbnails: {
+                customResizer: null,
+                maxCount: 0,
+                placeholders: {
+                    waitUntilResponse: false,
+                    notAvailablePath: null,
+                    waitingPath: null
+                },
+                timeBetweenThumbs: 750
+            },
+            scaling: {
+                hideScaled: false
+            },
+            showMessage: function(message) {
+                if (self._templating.hasDialog("alert")) {
+                    return self._templating.showDialog("alert", message);
+                } else {
+                    setTimeout(function() {
+                        window.alert(message);
+                    }, 0);
+                }
+            },
+            showConfirm: function(message) {
+                if (self._templating.hasDialog("confirm")) {
+                    return self._templating.showDialog("confirm", message);
+                } else {
+                    return window.confirm(message);
+                }
+            },
+            showPrompt: function(message, defaultValue) {
+                if (self._templating.hasDialog("prompt")) {
+                    return self._templating.showDialog("prompt", message, defaultValue);
+                } else {
+                    return window.prompt(message, defaultValue);
+                }
+            }
+        }, true);
+        qq.extend(this._options, o, true);
+        this._templating = new qq.Templating({
+            log: qq.bind(this.log, this),
+            templateIdOrEl: this._options.template,
+            containerEl: this._options.element,
+            fileContainerEl: this._options.listElement,
+            button: this._options.button,
+            imageGenerator: this._imageGenerator,
+            classes: {
+                hide: this._options.classes.hide,
+                editable: this._options.classes.editable
+            },
+            limits: {
+                maxThumbs: this._options.thumbnails.maxCount,
+                timeBetweenThumbs: this._options.thumbnails.timeBetweenThumbs
+            },
+            placeholders: {
+                waitUntilUpdate: this._options.thumbnails.placeholders.waitUntilResponse,
+                thumbnailNotAvailable: this._options.thumbnails.placeholders.notAvailablePath,
+                waitingForThumbnail: this._options.thumbnails.placeholders.waitingPath
+            },
+            text: this._options.text
+        });
+        if (this._options.workarounds.ios8SafariUploads && qq.ios800() && qq.iosSafari()) {
+            this._templating.renderFailure(this._options.messages.unsupportedBrowserIos8Safari);
+        } else if (!qq.supportedFeatures.uploading || this._options.cors.expected && !qq.supportedFeatures.uploadCors) {
+            this._templating.renderFailure(this._options.messages.unsupportedBrowser);
+        } else {
+            this._wrapCallbacks();
+            this._templating.render();
+            this._classes = this._options.classes;
+            if (!this._options.button && this._templating.getButton()) {
+                this._defaultButtonId = this._createUploadButton({
+                    element: this._templating.getButton(),
+                    title: this._options.text.fileInputTitle
+                }).getButtonId();
+            }
+            this._setupClickAndEditEventHandlers();
+            if (qq.DragAndDrop && qq.supportedFeatures.fileDrop) {
+                this._dnd = this._setupDragAndDrop();
+            }
+            if (this._options.paste.targetElement && this._options.paste.promptForName) {
+                if (qq.PasteSupport) {
+                    this._setupPastePrompt();
+                } else {
+                    this.log("Paste support module not found.", "error");
+                }
+            }
+            this._totalFilesInBatch = 0;
+            this._filesInBatchAddedToUi = 0;
+        }
+    };
+    qq.extend(qq.FineUploader.prototype, qq.basePublicApi);
+    qq.extend(qq.FineUploader.prototype, qq.basePrivateApi);
+    qq.extend(qq.FineUploader.prototype, qq.uiPublicApi);
+    qq.extend(qq.FineUploader.prototype, qq.uiPrivateApi);
+    qq.Templating = function(spec) {
+        "use strict";
+        var FILE_ID_ATTR = "qq-file-id", FILE_CLASS_PREFIX = "qq-file-id-", THUMBNAIL_MAX_SIZE_ATTR = "qq-max-size", THUMBNAIL_SERVER_SCALE_ATTR = "qq-server-scale", HIDE_DROPZONE_ATTR = "qq-hide-dropzone", DROPZPONE_TEXT_ATTR = "qq-drop-area-text", IN_PROGRESS_CLASS = "qq-in-progress", HIDDEN_FOREVER_CLASS = "qq-hidden-forever", fileBatch = {
+            content: document.createDocumentFragment(),
+            map: {}
+        }, isCancelDisabled = false, generatedThumbnails = 0, thumbnailQueueMonitorRunning = false, thumbGenerationQueue = [], thumbnailMaxSize = -1, options = {
+            log: null,
+            limits: {
+                maxThumbs: 0,
+                timeBetweenThumbs: 750
+            },
+            templateIdOrEl: "qq-template",
+            containerEl: null,
+            fileContainerEl: null,
+            button: null,
+            imageGenerator: null,
+            classes: {
+                hide: "qq-hide",
+                editable: "qq-editable"
+            },
+            placeholders: {
+                waitUntilUpdate: false,
+                thumbnailNotAvailable: null,
+                waitingForThumbnail: null
+            },
+            text: {
+                paused: "Paused"
+            }
+        }, selectorClasses = {
+            button: "qq-upload-button-selector",
+            alertDialog: "qq-alert-dialog-selector",
+            dialogCancelButton: "qq-cancel-button-selector",
+            confirmDialog: "qq-confirm-dialog-selector",
+            dialogMessage: "qq-dialog-message-selector",
+            dialogOkButton: "qq-ok-button-selector",
+            promptDialog: "qq-prompt-dialog-selector",
+            uploader: "qq-uploader-selector",
+            drop: "qq-upload-drop-area-selector",
+            list: "qq-upload-list-selector",
+            progressBarContainer: "qq-progress-bar-container-selector",
+            progressBar: "qq-progress-bar-selector",
+            totalProgressBarContainer: "qq-total-progress-bar-container-selector",
+            totalProgressBar: "qq-total-progress-bar-selector",
+            file: "qq-upload-file-selector",
+            spinner: "qq-upload-spinner-selector",
+            size: "qq-upload-size-selector",
+            cancel: "qq-upload-cancel-selector",
+            pause: "qq-upload-pause-selector",
+            continueButton: "qq-upload-continue-selector",
+            deleteButton: "qq-upload-delete-selector",
+            retry: "qq-upload-retry-selector",
+            statusText: "qq-upload-status-text-selector",
+            editFilenameInput: "qq-edit-filename-selector",
+            editNameIcon: "qq-edit-filename-icon-selector",
+            dropText: "qq-upload-drop-area-text-selector",
+            dropProcessing: "qq-drop-processing-selector",
+            dropProcessingSpinner: "qq-drop-processing-spinner-selector",
+            thumbnail: "qq-thumbnail-selector"
+        }, previewGeneration = {}, cachedThumbnailNotAvailableImg = new qq.Promise(), cachedWaitingForThumbnailImg = new qq.Promise(), log, isEditElementsExist, isRetryElementExist, templateHtml, container, fileList, showThumbnails, serverScale, cacheThumbnailPlaceholders = function() {
+            var notAvailableUrl = options.placeholders.thumbnailNotAvailable, waitingUrl = options.placeholders.waitingForThumbnail, spec = {
+                maxSize: thumbnailMaxSize,
+                scale: serverScale
+            };
+            if (showThumbnails) {
+                if (notAvailableUrl) {
+                    options.imageGenerator.generate(notAvailableUrl, new Image(), spec).then(function(updatedImg) {
+                        cachedThumbnailNotAvailableImg.success(updatedImg);
+                    }, function() {
+                        cachedThumbnailNotAvailableImg.failure();
+                        log("Problem loading 'not available' placeholder image at " + notAvailableUrl, "error");
+                    });
+                } else {
+                    cachedThumbnailNotAvailableImg.failure();
+                }
+                if (waitingUrl) {
+                    options.imageGenerator.generate(waitingUrl, new Image(), spec).then(function(updatedImg) {
+                        cachedWaitingForThumbnailImg.success(updatedImg);
+                    }, function() {
+                        cachedWaitingForThumbnailImg.failure();
+                        log("Problem loading 'waiting for thumbnail' placeholder image at " + waitingUrl, "error");
+                    });
+                } else {
+                    cachedWaitingForThumbnailImg.failure();
+                }
+            }
+        }, displayWaitingImg = function(thumbnail) {
+            var waitingImgPlacement = new qq.Promise();
+            cachedWaitingForThumbnailImg.then(function(img) {
+                maybeScalePlaceholderViaCss(img, thumbnail);
+                if (!thumbnail.src) {
+                    thumbnail.src = img.src;
+                    thumbnail.onload = function() {
+                        thumbnail.onload = null;
+                        show(thumbnail);
+                        waitingImgPlacement.success();
+                    };
+                } else {
+                    waitingImgPlacement.success();
+                }
+            }, function() {
+                hide(thumbnail);
+                waitingImgPlacement.success();
+            });
+            return waitingImgPlacement;
+        }, generateNewPreview = function(id, blob, spec) {
+            var thumbnail = getThumbnail(id);
+            log("Generating new thumbnail for " + id);
+            blob.qqThumbnailId = id;
+            return options.imageGenerator.generate(blob, thumbnail, spec).then(function() {
+                generatedThumbnails++;
+                show(thumbnail);
+                previewGeneration[id].success();
+            }, function() {
+                previewGeneration[id].failure();
+                if (!options.placeholders.waitUntilUpdate) {
+                    maybeSetDisplayNotAvailableImg(id, thumbnail);
+                }
+            });
+        }, generateNextQueuedPreview = function() {
+            if (thumbGenerationQueue.length) {
+                thumbnailQueueMonitorRunning = true;
+                var queuedThumbRequest = thumbGenerationQueue.shift();
+                if (queuedThumbRequest.update) {
+                    processUpdateQueuedPreviewRequest(queuedThumbRequest);
+                } else {
+                    processNewQueuedPreviewRequest(queuedThumbRequest);
+                }
+            } else {
+                thumbnailQueueMonitorRunning = false;
+            }
+        }, getCancel = function(id) {
+            return getTemplateEl(getFile(id), selectorClasses.cancel);
+        }, getContinue = function(id) {
+            return getTemplateEl(getFile(id), selectorClasses.continueButton);
+        }, getDialog = function(type) {
+            return getTemplateEl(container, selectorClasses[type + "Dialog"]);
+        }, getDelete = function(id) {
+            return getTemplateEl(getFile(id), selectorClasses.deleteButton);
+        }, getDropProcessing = function() {
+            return getTemplateEl(container, selectorClasses.dropProcessing);
+        }, getEditIcon = function(id) {
+            return getTemplateEl(getFile(id), selectorClasses.editNameIcon);
+        }, getFile = function(id) {
+            return fileBatch.map[id] || qq(fileList).getFirstByClass(FILE_CLASS_PREFIX + id);
+        }, getFilename = function(id) {
+            return getTemplateEl(getFile(id), selectorClasses.file);
+        }, getPause = function(id) {
+            return getTemplateEl(getFile(id), selectorClasses.pause);
+        }, getProgress = function(id) {
+            if (id == null) {
+                return getTemplateEl(container, selectorClasses.totalProgressBarContainer) || getTemplateEl(container, selectorClasses.totalProgressBar);
+            }
+            return getTemplateEl(getFile(id), selectorClasses.progressBarContainer) || getTemplateEl(getFile(id), selectorClasses.progressBar);
+        }, getRetry = function(id) {
+            return getTemplateEl(getFile(id), selectorClasses.retry);
+        }, getSize = function(id) {
+            return getTemplateEl(getFile(id), selectorClasses.size);
+        }, getSpinner = function(id) {
+            return getTemplateEl(getFile(id), selectorClasses.spinner);
+        }, getTemplateEl = function(context, cssClass) {
+            return context && qq(context).getFirstByClass(cssClass);
+        }, getThumbnail = function(id) {
+            return showThumbnails && getTemplateEl(getFile(id), selectorClasses.thumbnail);
+        }, hide = function(el) {
+            el && qq(el).addClass(options.classes.hide);
+        }, maybeScalePlaceholderViaCss = function(placeholder, thumbnail) {
+            var maxWidth = placeholder.style.maxWidth, maxHeight = placeholder.style.maxHeight;
+            if (maxHeight && maxWidth && !thumbnail.style.maxWidth && !thumbnail.style.maxHeight) {
+                qq(thumbnail).css({
+                    maxWidth: maxWidth,
+                    maxHeight: maxHeight
+                });
+            }
+        }, maybeSetDisplayNotAvailableImg = function(id, thumbnail) {
+            var previewing = previewGeneration[id] || new qq.Promise().failure(), notAvailableImgPlacement = new qq.Promise();
+            cachedThumbnailNotAvailableImg.then(function(img) {
+                previewing.then(function() {
+                    notAvailableImgPlacement.success();
+                }, function() {
+                    maybeScalePlaceholderViaCss(img, thumbnail);
+                    thumbnail.onload = function() {
+                        thumbnail.onload = null;
+                        notAvailableImgPlacement.success();
+                    };
+                    thumbnail.src = img.src;
+                    show(thumbnail);
+                });
+            });
+            return notAvailableImgPlacement;
+        }, parseAndGetTemplate = function() {
+            var scriptEl, scriptHtml, fileListNode, tempTemplateEl, fileListHtml, defaultButton, dropArea, thumbnail, dropProcessing, dropTextEl, uploaderEl;
+            log("Parsing template");
+            if (options.templateIdOrEl == null) {
+                throw new Error("You MUST specify either a template element or ID!");
+            }
+            if (qq.isString(options.templateIdOrEl)) {
+                scriptEl = document.getElementById(options.templateIdOrEl);
+                if (scriptEl === null) {
+                    throw new Error(qq.format("Cannot find template script at ID '{}'!", options.templateIdOrEl));
+                }
+                scriptHtml = scriptEl.innerHTML;
+            } else {
+                if (options.templateIdOrEl.innerHTML === undefined) {
+                    throw new Error("You have specified an invalid value for the template option!  " + "It must be an ID or an Element.");
+                }
+                scriptHtml = options.templateIdOrEl.innerHTML;
+            }
+            scriptHtml = qq.trimStr(scriptHtml);
+            tempTemplateEl = document.createElement("div");
+            tempTemplateEl.appendChild(qq.toElement(scriptHtml));
+            uploaderEl = qq(tempTemplateEl).getFirstByClass(selectorClasses.uploader);
+            if (options.button) {
+                defaultButton = qq(tempTemplateEl).getFirstByClass(selectorClasses.button);
+                if (defaultButton) {
+                    qq(defaultButton).remove();
+                }
+            }
+            if (!qq.DragAndDrop || !qq.supportedFeatures.fileDrop) {
+                dropProcessing = qq(tempTemplateEl).getFirstByClass(selectorClasses.dropProcessing);
+                if (dropProcessing) {
+                    qq(dropProcessing).remove();
+                }
+            }
+            dropArea = qq(tempTemplateEl).getFirstByClass(selectorClasses.drop);
+            if (dropArea && !qq.DragAndDrop) {
+                log("DnD module unavailable.", "info");
+                qq(dropArea).remove();
+            }
+            if (!qq.supportedFeatures.fileDrop) {
+                uploaderEl.removeAttribute(DROPZPONE_TEXT_ATTR);
+                if (dropArea && qq(dropArea).hasAttribute(HIDE_DROPZONE_ATTR)) {
+                    qq(dropArea).css({
+                        display: "none"
+                    });
+                }
+            } else if (qq(uploaderEl).hasAttribute(DROPZPONE_TEXT_ATTR) && dropArea) {
+                dropTextEl = qq(dropArea).getFirstByClass(selectorClasses.dropText);
+                dropTextEl && qq(dropTextEl).remove();
+            }
+            thumbnail = qq(tempTemplateEl).getFirstByClass(selectorClasses.thumbnail);
+            if (!showThumbnails) {
+                thumbnail && qq(thumbnail).remove();
+            } else if (thumbnail) {
+                thumbnailMaxSize = parseInt(thumbnail.getAttribute(THUMBNAIL_MAX_SIZE_ATTR));
+                thumbnailMaxSize = thumbnailMaxSize > 0 ? thumbnailMaxSize : null;
+                serverScale = qq(thumbnail).hasAttribute(THUMBNAIL_SERVER_SCALE_ATTR);
+            }
+            showThumbnails = showThumbnails && thumbnail;
+            isEditElementsExist = qq(tempTemplateEl).getByClass(selectorClasses.editFilenameInput).length > 0;
+            isRetryElementExist = qq(tempTemplateEl).getByClass(selectorClasses.retry).length > 0;
+            fileListNode = qq(tempTemplateEl).getFirstByClass(selectorClasses.list);
+            if (fileListNode == null) {
+                throw new Error("Could not find the file list container in the template!");
+            }
+            fileListHtml = fileListNode.innerHTML;
+            fileListNode.innerHTML = "";
+            if (tempTemplateEl.getElementsByTagName("DIALOG").length) {
+                document.createElement("dialog");
+            }
+            log("Template parsing complete");
+            return {
+                template: qq.trimStr(tempTemplateEl.innerHTML),
+                fileTemplate: qq.trimStr(fileListHtml)
+            };
+        }, prependFile = function(el, index, fileList) {
+            var parentEl = fileList, beforeEl = parentEl.firstChild;
+            if (index > 0) {
+                beforeEl = qq(parentEl).children()[index].nextSibling;
+            }
+            parentEl.insertBefore(el, beforeEl);
+        }, processNewQueuedPreviewRequest = function(queuedThumbRequest) {
+            var id = queuedThumbRequest.id, optFileOrBlob = queuedThumbRequest.optFileOrBlob, relatedThumbnailId = optFileOrBlob && optFileOrBlob.qqThumbnailId, thumbnail = getThumbnail(id), spec = {
+                customResizeFunction: queuedThumbRequest.customResizeFunction,
+                maxSize: thumbnailMaxSize,
+                orient: true,
+                scale: true
+            };
+            if (qq.supportedFeatures.imagePreviews) {
+                if (thumbnail) {
+                    if (options.limits.maxThumbs && options.limits.maxThumbs <= generatedThumbnails) {
+                        maybeSetDisplayNotAvailableImg(id, thumbnail);
+                        generateNextQueuedPreview();
+                    } else {
+                        displayWaitingImg(thumbnail).done(function() {
+                            previewGeneration[id] = new qq.Promise();
+                            previewGeneration[id].done(function() {
+                                setTimeout(generateNextQueuedPreview, options.limits.timeBetweenThumbs);
+                            });
+                            if (relatedThumbnailId != null) {
+                                useCachedPreview(id, relatedThumbnailId);
+                            } else {
+                                generateNewPreview(id, optFileOrBlob, spec);
+                            }
+                        });
+                    }
+                } else {
+                    generateNextQueuedPreview();
+                }
+            } else if (thumbnail) {
+                displayWaitingImg(thumbnail);
+                generateNextQueuedPreview();
+            }
+        }, processUpdateQueuedPreviewRequest = function(queuedThumbRequest) {
+            var id = queuedThumbRequest.id, thumbnailUrl = queuedThumbRequest.thumbnailUrl, showWaitingImg = queuedThumbRequest.showWaitingImg, thumbnail = getThumbnail(id), spec = {
+                customResizeFunction: queuedThumbRequest.customResizeFunction,
+                scale: serverScale,
+                maxSize: thumbnailMaxSize
+            };
+            if (thumbnail) {
+                if (thumbnailUrl) {
+                    if (options.limits.maxThumbs && options.limits.maxThumbs <= generatedThumbnails) {
+                        maybeSetDisplayNotAvailableImg(id, thumbnail);
+                        generateNextQueuedPreview();
+                    } else {
+                        if (showWaitingImg) {
+                            displayWaitingImg(thumbnail);
+                        }
+                        return options.imageGenerator.generate(thumbnailUrl, thumbnail, spec).then(function() {
+                            show(thumbnail);
+                            generatedThumbnails++;
+                            setTimeout(generateNextQueuedPreview, options.limits.timeBetweenThumbs);
+                        }, function() {
+                            maybeSetDisplayNotAvailableImg(id, thumbnail);
+                            setTimeout(generateNextQueuedPreview, options.limits.timeBetweenThumbs);
+                        });
+                    }
+                } else {
+                    maybeSetDisplayNotAvailableImg(id, thumbnail);
+                    generateNextQueuedPreview();
+                }
+            }
+        }, setProgressBarWidth = function(id, percent) {
+            var bar = getProgress(id), progressBarSelector = id == null ? selectorClasses.totalProgressBar : selectorClasses.progressBar;
+            if (bar && !qq(bar).hasClass(progressBarSelector)) {
+                bar = qq(bar).getFirstByClass(progressBarSelector);
+            }
+            if (bar) {
+                qq(bar).css({
+                    width: percent + "%"
+                });
+                bar.setAttribute("aria-valuenow", percent);
+            }
+        }, show = function(el) {
+            el && qq(el).removeClass(options.classes.hide);
+        }, useCachedPreview = function(targetThumbnailId, cachedThumbnailId) {
+            var targetThumbnail = getThumbnail(targetThumbnailId), cachedThumbnail = getThumbnail(cachedThumbnailId);
+            log(qq.format("ID {} is the same file as ID {}.  Will use generated thumbnail from ID {} instead.", targetThumbnailId, cachedThumbnailId, cachedThumbnailId));
+            previewGeneration[cachedThumbnailId].then(function() {
+                generatedThumbnails++;
+                previewGeneration[targetThumbnailId].success();
+                log(qq.format("Now using previously generated thumbnail created for ID {} on ID {}.", cachedThumbnailId, targetThumbnailId));
+                targetThumbnail.src = cachedThumbnail.src;
+                show(targetThumbnail);
+            }, function() {
+                previewGeneration[targetThumbnailId].failure();
+                if (!options.placeholders.waitUntilUpdate) {
+                    maybeSetDisplayNotAvailableImg(targetThumbnailId, targetThumbnail);
+                }
+            });
+        };
+        qq.extend(options, spec);
+        log = options.log;
+        if (!qq.supportedFeatures.imagePreviews) {
+            options.limits.timeBetweenThumbs = 0;
+            options.limits.maxThumbs = 0;
+        }
+        container = options.containerEl;
+        showThumbnails = options.imageGenerator !== undefined;
+        templateHtml = parseAndGetTemplate();
+        cacheThumbnailPlaceholders();
+        qq.extend(this, {
+            render: function() {
+                log("Rendering template in DOM.");
+                generatedThumbnails = 0;
+                container.innerHTML = templateHtml.template;
+                hide(getDropProcessing());
+                this.hideTotalProgress();
+                fileList = options.fileContainerEl || getTemplateEl(container, selectorClasses.list);
+                log("Template rendering complete");
+            },
+            renderFailure: function(message) {
+                var cantRenderEl = qq.toElement(message);
+                container.innerHTML = "";
+                container.appendChild(cantRenderEl);
+            },
+            reset: function() {
+                this.render();
+            },
+            clearFiles: function() {
+                fileList.innerHTML = "";
+            },
+            disableCancel: function() {
+                isCancelDisabled = true;
+            },
+            addFile: function(id, name, prependInfo, hideForever, batch) {
+                var fileEl = qq.toElement(templateHtml.fileTemplate), fileNameEl = getTemplateEl(fileEl, selectorClasses.file), uploaderEl = getTemplateEl(container, selectorClasses.uploader), fileContainer = batch ? fileBatch.content : fileList, thumb;
+                if (batch) {
+                    fileBatch.map[id] = fileEl;
+                }
+                qq(fileEl).addClass(FILE_CLASS_PREFIX + id);
+                uploaderEl.removeAttribute(DROPZPONE_TEXT_ATTR);
+                if (fileNameEl) {
+                    qq(fileNameEl).setText(name);
+                    fileNameEl.setAttribute("title", name);
+                }
+                fileEl.setAttribute(FILE_ID_ATTR, id);
+                if (prependInfo) {
+                    prependFile(fileEl, prependInfo.index, fileContainer);
+                } else {
+                    fileContainer.appendChild(fileEl);
+                }
+                if (hideForever) {
+                    fileEl.style.display = "none";
+                    qq(fileEl).addClass(HIDDEN_FOREVER_CLASS);
+                } else {
+                    hide(getProgress(id));
+                    hide(getSize(id));
+                    hide(getDelete(id));
+                    hide(getRetry(id));
+                    hide(getPause(id));
+                    hide(getContinue(id));
+                    if (isCancelDisabled) {
+                        this.hideCancel(id);
+                    }
+                    thumb = getThumbnail(id);
+                    if (thumb && !thumb.src) {
+                        cachedWaitingForThumbnailImg.then(function(waitingImg) {
+                            thumb.src = waitingImg.src;
+                            if (waitingImg.style.maxHeight && waitingImg.style.maxWidth) {
+                                qq(thumb).css({
+                                    maxHeight: waitingImg.style.maxHeight,
+                                    maxWidth: waitingImg.style.maxWidth
+                                });
+                            }
+                            show(thumb);
+                        });
+                    }
+                }
+            },
+            addFileToCache: function(id, name, prependInfo, hideForever) {
+                this.addFile(id, name, prependInfo, hideForever, true);
+            },
+            addCacheToDom: function() {
+                fileList.appendChild(fileBatch.content);
+                fileBatch.content = document.createDocumentFragment();
+                fileBatch.map = {};
+            },
+            removeFile: function(id) {
+                qq(getFile(id)).remove();
+            },
+            getFileId: function(el) {
+                var currentNode = el;
+                if (currentNode) {
+                    while (currentNode.getAttribute(FILE_ID_ATTR) == null) {
+                        currentNode = currentNode.parentNode;
+                    }
+                    return parseInt(currentNode.getAttribute(FILE_ID_ATTR));
+                }
+            },
+            getFileList: function() {
+                return fileList;
+            },
+            markFilenameEditable: function(id) {
+                var filename = getFilename(id);
+                filename && qq(filename).addClass(options.classes.editable);
+            },
+            updateFilename: function(id, name) {
+                var filenameEl = getFilename(id);
+                if (filenameEl) {
+                    qq(filenameEl).setText(name);
+                    filenameEl.setAttribute("title", name);
+                }
+            },
+            hideFilename: function(id) {
+                hide(getFilename(id));
+            },
+            showFilename: function(id) {
+                show(getFilename(id));
+            },
+            isFileName: function(el) {
+                return qq(el).hasClass(selectorClasses.file);
+            },
+            getButton: function() {
+                return options.button || getTemplateEl(container, selectorClasses.button);
+            },
+            hideDropProcessing: function() {
+                hide(getDropProcessing());
+            },
+            showDropProcessing: function() {
+                show(getDropProcessing());
+            },
+            getDropZone: function() {
+                return getTemplateEl(container, selectorClasses.drop);
+            },
+            isEditFilenamePossible: function() {
+                return isEditElementsExist;
+            },
+            hideRetry: function(id) {
+                hide(getRetry(id));
+            },
+            isRetryPossible: function() {
+                return isRetryElementExist;
+            },
+            showRetry: function(id) {
+                show(getRetry(id));
+            },
+            getFileContainer: function(id) {
+                return getFile(id);
+            },
+            showEditIcon: function(id) {
+                var icon = getEditIcon(id);
+                icon && qq(icon).addClass(options.classes.editable);
+            },
+            isHiddenForever: function(id) {
+                return qq(getFile(id)).hasClass(HIDDEN_FOREVER_CLASS);
+            },
+            hideEditIcon: function(id) {
+                var icon = getEditIcon(id);
+                icon && qq(icon).removeClass(options.classes.editable);
+            },
+            isEditIcon: function(el) {
+                return qq(el).hasClass(selectorClasses.editNameIcon, true);
+            },
+            getEditInput: function(id) {
+                return getTemplateEl(getFile(id), selectorClasses.editFilenameInput);
+            },
+            isEditInput: function(el) {
+                return qq(el).hasClass(selectorClasses.editFilenameInput, true);
+            },
+            updateProgress: function(id, loaded, total) {
+                var bar = getProgress(id), percent;
+                if (bar && total > 0) {
+                    percent = Math.round(loaded / total * 100);
+                    if (percent === 100) {
+                        hide(bar);
+                    } else {
+                        show(bar);
+                    }
+                    setProgressBarWidth(id, percent);
+                }
+            },
+            updateTotalProgress: function(loaded, total) {
+                this.updateProgress(null, loaded, total);
+            },
+            hideProgress: function(id) {
+                var bar = getProgress(id);
+                bar && hide(bar);
+            },
+            hideTotalProgress: function() {
+                this.hideProgress();
+            },
+            resetProgress: function(id) {
+                setProgressBarWidth(id, 0);
+                this.hideTotalProgress(id);
+            },
+            resetTotalProgress: function() {
+                this.resetProgress();
+            },
+            showCancel: function(id) {
+                if (!isCancelDisabled) {
+                    var cancel = getCancel(id);
+                    cancel && qq(cancel).removeClass(options.classes.hide);
+                }
+            },
+            hideCancel: function(id) {
+                hide(getCancel(id));
+            },
+            isCancel: function(el) {
+                return qq(el).hasClass(selectorClasses.cancel, true);
+            },
+            allowPause: function(id) {
+                show(getPause(id));
+                hide(getContinue(id));
+            },
+            uploadPaused: function(id) {
+                this.setStatusText(id, options.text.paused);
+                this.allowContinueButton(id);
+                hide(getSpinner(id));
+            },
+            hidePause: function(id) {
+                hide(getPause(id));
+            },
+            isPause: function(el) {
+                return qq(el).hasClass(selectorClasses.pause, true);
+            },
+            isContinueButton: function(el) {
+                return qq(el).hasClass(selectorClasses.continueButton, true);
+            },
+            allowContinueButton: function(id) {
+                show(getContinue(id));
+                hide(getPause(id));
+            },
+            uploadContinued: function(id) {
+                this.setStatusText(id, "");
+                this.allowPause(id);
+                show(getSpinner(id));
+            },
+            showDeleteButton: function(id) {
+                show(getDelete(id));
+            },
+            hideDeleteButton: function(id) {
+                hide(getDelete(id));
+            },
+            isDeleteButton: function(el) {
+                return qq(el).hasClass(selectorClasses.deleteButton, true);
+            },
+            isRetry: function(el) {
+                return qq(el).hasClass(selectorClasses.retry, true);
+            },
+            updateSize: function(id, text) {
+                var size = getSize(id);
+                if (size) {
+                    show(size);
+                    qq(size).setText(text);
+                }
+            },
+            setStatusText: function(id, text) {
+                var textEl = getTemplateEl(getFile(id), selectorClasses.statusText);
+                if (textEl) {
+                    if (text == null) {
+                        qq(textEl).clearText();
+                    } else {
+                        qq(textEl).setText(text);
+                    }
+                }
+            },
+            hideSpinner: function(id) {
+                qq(getFile(id)).removeClass(IN_PROGRESS_CLASS);
+                hide(getSpinner(id));
+            },
+            showSpinner: function(id) {
+                qq(getFile(id)).addClass(IN_PROGRESS_CLASS);
+                show(getSpinner(id));
+            },
+            generatePreview: function(id, optFileOrBlob, customResizeFunction) {
+                if (!this.isHiddenForever(id)) {
+                    thumbGenerationQueue.push({
+                        id: id,
+                        customResizeFunction: customResizeFunction,
+                        optFileOrBlob: optFileOrBlob
+                    });
+                    !thumbnailQueueMonitorRunning && generateNextQueuedPreview();
+                }
+            },
+            updateThumbnail: function(id, thumbnailUrl, showWaitingImg, customResizeFunction) {
+                if (!this.isHiddenForever(id)) {
+                    thumbGenerationQueue.push({
+                        customResizeFunction: customResizeFunction,
+                        update: true,
+                        id: id,
+                        thumbnailUrl: thumbnailUrl,
+                        showWaitingImg: showWaitingImg
+                    });
+                    !thumbnailQueueMonitorRunning && generateNextQueuedPreview();
+                }
+            },
+            hasDialog: function(type) {
+                return qq.supportedFeatures.dialogElement && !!getDialog(type);
+            },
+            showDialog: function(type, message, defaultValue) {
+                var dialog = getDialog(type), messageEl = getTemplateEl(dialog, selectorClasses.dialogMessage), inputEl = dialog.getElementsByTagName("INPUT")[0], cancelBtn = getTemplateEl(dialog, selectorClasses.dialogCancelButton), okBtn = getTemplateEl(dialog, selectorClasses.dialogOkButton), promise = new qq.Promise(), closeHandler = function() {
+                    cancelBtn.removeEventListener("click", cancelClickHandler);
+                    okBtn && okBtn.removeEventListener("click", okClickHandler);
+                    promise.failure();
+                }, cancelClickHandler = function() {
+                    cancelBtn.removeEventListener("click", cancelClickHandler);
+                    dialog.close();
+                }, okClickHandler = function() {
+                    dialog.removeEventListener("close", closeHandler);
+                    okBtn.removeEventListener("click", okClickHandler);
+                    dialog.close();
+                    promise.success(inputEl && inputEl.value);
+                };
+                dialog.addEventListener("close", closeHandler);
+                cancelBtn.addEventListener("click", cancelClickHandler);
+                okBtn && okBtn.addEventListener("click", okClickHandler);
+                if (inputEl) {
+                    inputEl.value = defaultValue;
+                }
+                messageEl.textContent = message;
+                dialog.showModal();
+                return promise;
+            }
+        });
+    };
+    qq.UiEventHandler = function(s, protectedApi) {
+        "use strict";
+        var disposer = new qq.DisposeSupport(), spec = {
+            eventType: "click",
+            attachTo: null,
+            onHandled: function(target, event) {}
+        };
+        qq.extend(this, {
+            addHandler: function(element) {
+                addHandler(element);
+            },
+            dispose: function() {
+                disposer.dispose();
+            }
+        });
+        function addHandler(element) {
+            disposer.attach(element, spec.eventType, function(event) {
+                event = event || window.event;
+                var target = event.target || event.srcElement;
+                spec.onHandled(target, event);
+            });
+        }
+        qq.extend(protectedApi, {
+            getFileIdFromItem: function(item) {
+                return item.qqFileId;
+            },
+            getDisposeSupport: function() {
+                return disposer;
+            }
+        });
+        qq.extend(spec, s);
+        if (spec.attachTo) {
+            addHandler(spec.attachTo);
+        }
+    };
+    qq.FileButtonsClickHandler = function(s) {
+        "use strict";
+        var inheritedInternalApi = {}, spec = {
+            templating: null,
+            log: function(message, lvl) {},
+            onDeleteFile: function(fileId) {},
+            onCancel: function(fileId) {},
+            onRetry: function(fileId) {},
+            onPause: function(fileId) {},
+            onContinue: function(fileId) {},
+            onGetName: function(fileId) {}
+        }, buttonHandlers = {
+            cancel: function(id) {
+                spec.onCancel(id);
+            },
+            retry: function(id) {
+                spec.onRetry(id);
+            },
+            deleteButton: function(id) {
+                spec.onDeleteFile(id);
+            },
+            pause: function(id) {
+                spec.onPause(id);
+            },
+            continueButton: function(id) {
+                spec.onContinue(id);
+            }
+        };
+        function examineEvent(target, event) {
+            qq.each(buttonHandlers, function(buttonType, handler) {
+                var firstLetterCapButtonType = buttonType.charAt(0).toUpperCase() + buttonType.slice(1), fileId;
+                if (spec.templating["is" + firstLetterCapButtonType](target)) {
+                    fileId = spec.templating.getFileId(target);
+                    qq.preventDefault(event);
+                    spec.log(qq.format("Detected valid file button click event on file '{}', ID: {}.", spec.onGetName(fileId), fileId));
+                    handler(fileId);
+                    return false;
+                }
+            });
+        }
+        qq.extend(spec, s);
+        spec.eventType = "click";
+        spec.onHandled = examineEvent;
+        spec.attachTo = spec.templating.getFileList();
+        qq.extend(this, new qq.UiEventHandler(spec, inheritedInternalApi));
+    };
+    qq.FilenameClickHandler = function(s) {
+        "use strict";
+        var inheritedInternalApi = {}, spec = {
+            templating: null,
+            log: function(message, lvl) {},
+            classes: {
+                file: "qq-upload-file",
+                editNameIcon: "qq-edit-filename-icon"
+            },
+            onGetUploadStatus: function(fileId) {},
+            onGetName: function(fileId) {}
+        };
+        qq.extend(spec, s);
+        function examineEvent(target, event) {
+            if (spec.templating.isFileName(target) || spec.templating.isEditIcon(target)) {
+                var fileId = spec.templating.getFileId(target), status = spec.onGetUploadStatus(fileId);
+                if (status === qq.status.SUBMITTED) {
+                    spec.log(qq.format("Detected valid filename click event on file '{}', ID: {}.", spec.onGetName(fileId), fileId));
+                    qq.preventDefault(event);
+                    inheritedInternalApi.handleFilenameEdit(fileId, target, true);
+                }
+            }
+        }
+        spec.eventType = "click";
+        spec.onHandled = examineEvent;
+        qq.extend(this, new qq.FilenameEditHandler(spec, inheritedInternalApi));
+    };
+    qq.FilenameInputFocusInHandler = function(s, inheritedInternalApi) {
+        "use strict";
+        var spec = {
+            templating: null,
+            onGetUploadStatus: function(fileId) {},
+            log: function(message, lvl) {}
+        };
+        if (!inheritedInternalApi) {
+            inheritedInternalApi = {};
+        }
+        function handleInputFocus(target, event) {
+            if (spec.templating.isEditInput(target)) {
+                var fileId = spec.templating.getFileId(target), status = spec.onGetUploadStatus(fileId);
+                if (status === qq.status.SUBMITTED) {
+                    spec.log(qq.format("Detected valid filename input focus event on file '{}', ID: {}.", spec.onGetName(fileId), fileId));
+                    inheritedInternalApi.handleFilenameEdit(fileId, target);
+                }
+            }
+        }
+        spec.eventType = "focusin";
+        spec.onHandled = handleInputFocus;
+        qq.extend(spec, s);
+        qq.extend(this, new qq.FilenameEditHandler(spec, inheritedInternalApi));
+    };
+    qq.FilenameInputFocusHandler = function(spec) {
+        "use strict";
+        spec.eventType = "focus";
+        spec.attachTo = null;
+        qq.extend(this, new qq.FilenameInputFocusInHandler(spec, {}));
+    };
+    qq.FilenameEditHandler = function(s, inheritedInternalApi) {
+        "use strict";
+        var spec = {
+            templating: null,
+            log: function(message, lvl) {},
+            onGetUploadStatus: function(fileId) {},
+            onGetName: function(fileId) {},
+            onSetName: function(fileId, newName) {},
+            onEditingStatusChange: function(fileId, isEditing) {}
+        };
+        function getFilenameSansExtension(fileId) {
+            var filenameSansExt = spec.onGetName(fileId), extIdx = filenameSansExt.lastIndexOf(".");
+            if (extIdx > 0) {
+                filenameSansExt = filenameSansExt.substr(0, extIdx);
+            }
+            return filenameSansExt;
+        }
+        function getOriginalExtension(fileId) {
+            var origName = spec.onGetName(fileId);
+            return qq.getExtension(origName);
+        }
+        function handleNameUpdate(newFilenameInputEl, fileId) {
+            var newName = newFilenameInputEl.value, origExtension;
+            if (newName !== undefined && qq.trimStr(newName).length > 0) {
+                origExtension = getOriginalExtension(fileId);
+                if (origExtension !== undefined) {
+                    newName = newName + "." + origExtension;
+                }
+                spec.onSetName(fileId, newName);
+            }
+            spec.onEditingStatusChange(fileId, false);
+        }
+        function registerInputBlurHandler(inputEl, fileId) {
+            inheritedInternalApi.getDisposeSupport().attach(inputEl, "blur", function() {
+                handleNameUpdate(inputEl, fileId);
+            });
+        }
+        function registerInputEnterKeyHandler(inputEl, fileId) {
+            inheritedInternalApi.getDisposeSupport().attach(inputEl, "keyup", function(event) {
+                var code = event.keyCode || event.which;
+                if (code === 13) {
+                    handleNameUpdate(inputEl, fileId);
+                }
+            });
+        }
+        qq.extend(spec, s);
+        spec.attachTo = spec.templating.getFileList();
+        qq.extend(this, new qq.UiEventHandler(spec, inheritedInternalApi));
+        qq.extend(inheritedInternalApi, {
+            handleFilenameEdit: function(id, target, focusInput) {
+                var newFilenameInputEl = spec.templating.getEditInput(id);
+                spec.onEditingStatusChange(id, true);
+                newFilenameInputEl.value = getFilenameSansExtension(id);
+                if (focusInput) {
+                    newFilenameInputEl.focus();
+                }
+                registerInputBlurHandler(newFilenameInputEl, id);
+                registerInputEnterKeyHandler(newFilenameInputEl, id);
+            }
+        });
+    };
+})(window);
+//# sourceMappingURL=fine-uploader.js.map
+
+/***/ }),
+
+/***/ "./node_modules/_fine-uploader@5.15.0@fine-uploader/lib/traditional.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = __webpack_require__("./node_modules/_fine-uploader@5.15.0@fine-uploader/fine-uploader/fine-uploader.js");
+
+
+/***/ }),
+
+/***/ "./node_modules/_is-buffer@1.1.5@is-buffer/index.js":
+/***/ (function(module, exports) {
+
+/*!
+ * Determine if an object is a Buffer
+ *
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @license  MIT
+ */
+
+// The _isBuffer check is for Safari 5-7 support, because it's missing
+// Object.prototype.constructor. Remove this eventually
+module.exports = function (obj) {
+  return obj != null && (isBuffer(obj) || isSlowBuffer(obj) || !!obj._isBuffer)
+}
+
+function isBuffer (obj) {
+  return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
+}
+
+// For Node v0.10 support. Remove this eventually.
+function isSlowBuffer (obj) {
+  return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
+}
+
 
 /***/ }),
 
@@ -14606,6 +24065,220 @@ if (true) {
 
 /***/ }),
 
+/***/ "./node_modules/_process@0.11.10@process/browser.js":
+/***/ (function(module, exports) {
+
+// shim for using process in browser
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        runTimeout(drainQueue);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+
+process.listeners = function (name) { return [] }
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+
+/***/ }),
+
+/***/ "./node_modules/_sweetalert@2.0.2@sweetalert/dist/sweetalert.min.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+!function(t,e){ true?module.exports=e():"function"==typeof define&&define.amd?define([],e):"object"==typeof exports?exports.swal=e():t.swal=e()}(this,function(){return function(t){function e(o){if(n[o])return n[o].exports;var r=n[o]={i:o,l:!1,exports:{}};return t[o].call(r.exports,r,r.exports,e),r.l=!0,r.exports}var n={};return e.m=t,e.c=n,e.d=function(t,n,o){e.o(t,n)||Object.defineProperty(t,n,{configurable:!1,enumerable:!0,get:o})},e.n=function(t){var n=t&&t.__esModule?function(){return t.default}:function(){return t};return e.d(n,"a",n),n},e.o=function(t,e){return Object.prototype.hasOwnProperty.call(t,e)},e.p="",e(e.s=8)}([function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o="swal-button";e.CLASS_NAMES={MODAL:"swal-modal",OVERLAY:"swal-overlay",SHOW_MODAL:"swal-overlay--show-modal",MODAL_TITLE:"swal-title",MODAL_TEXT:"swal-text",ICON:"swal-icon",ICON_CUSTOM:"swal-icon--custom",CONTENT:"swal-content",FOOTER:"swal-footer",BUTTON_CONTAINER:"swal-button-container",BUTTON:o,CONFIRM_BUTTON:o+"--confirm",CANCEL_BUTTON:o+"--cancel",DANGER_BUTTON:o+"--danger",BUTTON_LOADING:o+"--loading",BUTTON_LOADER:o+"__loader"},e.default=e.CLASS_NAMES},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0}),e.getNode=function(t){var e="."+t;return document.querySelector(e)},e.stringToNode=function(t){var e=document.createElement("div");return e.innerHTML=t.trim(),e.firstChild},e.insertAfter=function(t,e){var n=e.nextSibling;e.parentNode.insertBefore(t,n)},e.removeNode=function(t){t.parentElement.removeChild(t)},e.throwErr=function(t){throw t=t.replace(/ +(?= )/g,""),"SweetAlert: "+(t=t.trim())},e.isPlainObject=function(t){if("[object Object]"!==Object.prototype.toString.call(t))return!1;var e=Object.getPrototypeOf(t);return null===e||e===Object.prototype},e.ordinalSuffixOf=function(t){var e=t%10,n=t%100;return 1===e&&11!==n?t+"st":2===e&&12!==n?t+"nd":3===e&&13!==n?t+"rd":t+"th"}},function(t,e,n){"use strict";function o(t){for(var n in t)e.hasOwnProperty(n)||(e[n]=t[n])}Object.defineProperty(e,"__esModule",{value:!0}),o(n(18));var r=n(19);e.overlayMarkup=r.default,o(n(20)),o(n(21)),o(n(22));var a=n(0),i=a.default.MODAL_TITLE,s=a.default.MODAL_TEXT,l=a.default.ICON,c=a.default.FOOTER;e.iconMarkup='\n  <div class="'+l+'"></div>',e.titleMarkup='\n  <div class="'+i+'"></div>\n',e.textMarkup='\n  <div class="'+s+'"></div>',e.footerMarkup='\n  <div class="'+c+'"></div>\n'},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1);e.CONFIRM_KEY="confirm",e.CANCEL_KEY="cancel";var r={visible:!0,text:null,value:null,className:"",closeModal:!0},a=Object.assign({},r,{visible:!1,text:"Cancel",value:null}),i=Object.assign({},r,{text:"OK",value:!0});e.defaultButtonList={cancel:a,confirm:i};var s=function(t){switch(t){case e.CONFIRM_KEY:return i;case e.CANCEL_KEY:return a;default:var n=t.charAt(0).toUpperCase()+t.slice(1);return Object.assign({},r,{text:n,value:t})}},l=function(t,e){var n=s(t);return!0===e?Object.assign({},n,{visible:!0}):"string"==typeof e?Object.assign({},n,{visible:!0,text:e}):o.isPlainObject(e)?Object.assign({visible:!0},n,e):Object.assign({},n,{visible:!1})},c=function(t){for(var e={},n=0,o=Object.keys(t);n<o.length;n++){var r=o[n],i=t[r],s=l(r,i);e[r]=s}return e.cancel||(e.cancel=a),e},u=function(t){var n={};switch(t.length){case 1:n[e.CANCEL_KEY]=Object.assign({},a,{visible:!1});break;case 2:n[e.CANCEL_KEY]=l(e.CANCEL_KEY,t[0]),n[e.CONFIRM_KEY]=l(e.CONFIRM_KEY,t[1]);break;default:o.throwErr("Invalid number of 'buttons' in array ("+t.length+").\n      If you want more than 2 buttons, you need to use an object!")}return n};e.getButtonListOpts=function(t){var n=e.defaultButtonList;return"string"==typeof t?n[e.CONFIRM_KEY]=l(e.CONFIRM_KEY,t):Array.isArray(t)?n=u(t):o.isPlainObject(t)?n=c(t):!0===t?n=u([!0,!0]):!1===t?n=u([!1,!1]):void 0===t&&(n=e.defaultButtonList),n}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(2),a=n(0),i=a.default.MODAL,s=a.default.OVERLAY,l=n(23),c=n(24),u=n(25),d=n(26);e.injectElIntoModal=function(t){var e=o.getNode(i),n=o.stringToNode(t);return e.appendChild(n),n};var f=function(t){t.className=i,t.textContent=""},p=function(t,e){f(t);var n=e.className;n&&t.classList.add(n)};e.initModalContent=function(t){var e=o.getNode(i);p(e,t),l.default(t.icon),c.initTitle(t.title),c.initText(t.text),d.default(t.content),u.default(t.buttons,t.dangerMode)};var b=function(){var t=o.getNode(s),e=o.stringToNode(r.modalMarkup);t.appendChild(e)};e.default=b},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(3),r={isOpen:!1,promise:null,actions:{},timer:null},a=Object.assign({},r);e.resetState=function(){a=Object.assign({},r)},e.setActionValue=function(t){if("string"==typeof t)return i(o.CONFIRM_KEY,t);for(var e in t)i(e,t[e])};var i=function(t,e){a.actions[t]||(a.actions[t]={}),Object.assign(a.actions[t],{value:e})};e.setActionOptionsFor=function(t,e){var n=(void 0===e?{}:e).closeModal,o=void 0===n||n;Object.assign(a.actions[t],{closeModal:o})},e.default=a},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(3),a=n(0),i=a.default.OVERLAY,s=a.default.SHOW_MODAL,l=a.default.BUTTON,c=a.default.BUTTON_LOADING,u=n(5);e.openModal=function(){o.getNode(i).classList.add(s),u.default.isOpen=!0};var d=function(){o.getNode(i).classList.remove(s),u.default.isOpen=!1};e.onAction=function(t){void 0===t&&(t=r.CANCEL_KEY);var e=u.default.actions[t],n=e.value;if(!1===e.closeModal){var a=l+"--"+t;o.getNode(a).classList.add(c)}else d();u.default.promise.resolve(n)},e.getState=function(){var t=Object.assign({},u.default);return delete t.promise,delete t.timer,t},e.stopLoading=function(){for(var t=document.querySelectorAll("."+l),e=0;e<t.length;e++){t[e].classList.remove(c)}}},function(t,e){var n;n=function(){return this}();try{n=n||Function("return this")()||(0,eval)("this")}catch(t){"object"==typeof window&&(n=window)}t.exports=n},function(t,e,n){(function(e){t.exports=e.sweetAlert=n(9)}).call(e,n(7))},function(t,e,n){(function(e){t.exports=e.swal=n(10)}).call(e,n(7))},function(t,e,n){"undefined"!=typeof window&&n(11);const o=n(16).default;t.exports=o},function(t,e,n){var o=n(12);"string"==typeof o&&(o=[[t.i,o,""]]);var r={};r.transform=void 0;n(14)(o,r);o.locals&&(t.exports=o.locals)},function(t,e,n){e=t.exports=n(13)(void 0),e.push([t.i,'.swal-icon--error{border-color:#f27474;-webkit-animation:animateErrorIcon .5s;animation:animateErrorIcon .5s}.swal-icon--error__x-mark{position:relative;display:block;-webkit-animation:animateXMark .5s;animation:animateXMark .5s}.swal-icon--error__line{position:absolute;height:5px;width:47px;background-color:#f27474;display:block;top:37px;border-radius:2px}.swal-icon--error__line--left{-webkit-transform:rotate(45deg);transform:rotate(45deg);left:17px}.swal-icon--error__line--right{-webkit-transform:rotate(-45deg);transform:rotate(-45deg);right:16px}@-webkit-keyframes animateErrorIcon{0%{-webkit-transform:rotateX(100deg);transform:rotateX(100deg);opacity:0}to{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);opacity:1}}@keyframes animateErrorIcon{0%{-webkit-transform:rotateX(100deg);transform:rotateX(100deg);opacity:0}to{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);opacity:1}}@-webkit-keyframes animateXMark{0%{-webkit-transform:scale(.4);transform:scale(.4);margin-top:26px;opacity:0}50%{-webkit-transform:scale(.4);transform:scale(.4);margin-top:26px;opacity:0}80%{-webkit-transform:scale(1.15);transform:scale(1.15);margin-top:-6px}to{-webkit-transform:scale(1);transform:scale(1);margin-top:0;opacity:1}}@keyframes animateXMark{0%{-webkit-transform:scale(.4);transform:scale(.4);margin-top:26px;opacity:0}50%{-webkit-transform:scale(.4);transform:scale(.4);margin-top:26px;opacity:0}80%{-webkit-transform:scale(1.15);transform:scale(1.15);margin-top:-6px}to{-webkit-transform:scale(1);transform:scale(1);margin-top:0;opacity:1}}.swal-icon--warning{border-color:#f8bb86;-webkit-animation:pulseWarning .75s infinite alternate;animation:pulseWarning .75s infinite alternate}.swal-icon--warning__body{width:5px;height:47px;top:10px;border-radius:2px;margin-left:-2px}.swal-icon--warning__body,.swal-icon--warning__dot{position:absolute;left:50%;background-color:#f8bb86}.swal-icon--warning__dot{width:7px;height:7px;border-radius:50%;margin-left:-4px;bottom:-11px}@-webkit-keyframes pulseWarning{0%{border-color:#f8d486}to{border-color:#f8bb86}}@keyframes pulseWarning{0%{border-color:#f8d486}to{border-color:#f8bb86}}.swal-icon--success{border-color:#a5dc86}.swal-icon--success:after,.swal-icon--success:before{content:"";border-radius:50%;position:absolute;width:60px;height:120px;background:#fff;-webkit-transform:rotate(45deg);transform:rotate(45deg)}.swal-icon--success:before{border-radius:120px 0 0 120px;top:-7px;left:-33px;-webkit-transform:rotate(-45deg);transform:rotate(-45deg);-webkit-transform-origin:60px 60px;transform-origin:60px 60px}.swal-icon--success:after{border-radius:0 120px 120px 0;top:-11px;left:30px;-webkit-transform:rotate(-45deg);transform:rotate(-45deg);-webkit-transform-origin:0 60px;transform-origin:0 60px;-webkit-animation:rotatePlaceholder 4.25s ease-in;animation:rotatePlaceholder 4.25s ease-in}.swal-icon--success__ring{width:80px;height:80px;border:4px solid hsla(98,55%,69%,.2);border-radius:50%;box-sizing:content-box;position:absolute;left:-4px;top:-4px;z-index:2}.swal-icon--success__hide-corners{width:5px;height:90px;background-color:#fff;position:absolute;left:28px;top:8px;z-index:1;-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}.swal-icon--success__line{height:5px;background-color:#a5dc86;display:block;border-radius:2px;position:absolute;z-index:2}.swal-icon--success__line--tip{width:25px;left:14px;top:46px;-webkit-transform:rotate(45deg);transform:rotate(45deg);-webkit-animation:animateSuccessTip .75s;animation:animateSuccessTip .75s}.swal-icon--success__line--long{width:47px;right:8px;top:38px;-webkit-transform:rotate(-45deg);transform:rotate(-45deg);-webkit-animation:animateSuccessLong .75s;animation:animateSuccessLong .75s}@-webkit-keyframes rotatePlaceholder{0%{-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}5%{-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}12%{-webkit-transform:rotate(-405deg);transform:rotate(-405deg)}to{-webkit-transform:rotate(-405deg);transform:rotate(-405deg)}}@keyframes rotatePlaceholder{0%{-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}5%{-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}12%{-webkit-transform:rotate(-405deg);transform:rotate(-405deg)}to{-webkit-transform:rotate(-405deg);transform:rotate(-405deg)}}@-webkit-keyframes animateSuccessTip{0%{width:0;left:1px;top:19px}54%{width:0;left:1px;top:19px}70%{width:50px;left:-8px;top:37px}84%{width:17px;left:21px;top:48px}to{width:25px;left:14px;top:45px}}@keyframes animateSuccessTip{0%{width:0;left:1px;top:19px}54%{width:0;left:1px;top:19px}70%{width:50px;left:-8px;top:37px}84%{width:17px;left:21px;top:48px}to{width:25px;left:14px;top:45px}}@-webkit-keyframes animateSuccessLong{0%{width:0;right:46px;top:54px}65%{width:0;right:46px;top:54px}84%{width:55px;right:0;top:35px}to{width:47px;right:8px;top:38px}}@keyframes animateSuccessLong{0%{width:0;right:46px;top:54px}65%{width:0;right:46px;top:54px}84%{width:55px;right:0;top:35px}to{width:47px;right:8px;top:38px}}.swal-icon--info{border-color:#c9dae1}.swal-icon--info:before{width:5px;height:29px;bottom:17px;border-radius:2px;margin-left:-2px}.swal-icon--info:after,.swal-icon--info:before{content:"";position:absolute;left:50%;background-color:#c9dae1}.swal-icon--info:after{width:7px;height:7px;border-radius:50%;margin-left:-3px;top:19px}.swal-icon{width:80px;height:80px;border-width:4px;border-style:solid;border-radius:50%;padding:0;position:relative;box-sizing:content-box;margin:20px auto}.swal-icon:first-child{margin-top:32px}.swal-icon--custom{width:auto;height:auto;max-width:100%;border:none;border-radius:0}.swal-icon img{max-width:100%;max-height:100%}.swal-title{color:rgba(0,0,0,.65);font-weight:600;text-transform:none;position:relative;display:block;padding:13px 16px;font-size:27px;line-height:normal;text-align:center;margin-bottom:0}.swal-title:first-child{margin-top:26px}.swal-title:not(:first-child){padding-bottom:0}.swal-title:not(:last-child){margin-bottom:13px}.swal-text{font-size:16px;position:relative;float:none;line-height:normal;vertical-align:top;text-align:left;display:inline-block;margin:0;padding:0 10px;font-weight:400;color:rgba(0,0,0,.64);max-width:calc(100% - 20px);overflow-wrap:break-word;box-sizing:border-box}.swal-text:first-child{margin-top:45px}.swal-text:last-child{margin-bottom:45px}.swal-footer{text-align:right;padding-top:13px;margin-top:13px;padding:13px 16px;border-radius:inherit;border-top-left-radius:0;border-top-right-radius:0}.swal-button-container{margin:5px;display:inline-block;position:relative}.swal-button{background-color:#7cd1f9;color:#fff;border:none;box-shadow:none;border-radius:5px;font-weight:600;font-size:14px;padding:10px 24px;margin:0;cursor:pointer}.swal-button:hover{background-color:#78cbf2}.swal-button:active{background-color:#70bce0}.swal-button:focus{outline:none;box-shadow:0 0 0 1px #fff,0 0 0 3px rgba(43,114,165,.29)}.swal-button::-moz-focus-inner{border:0}.swal-button--cancel{color:#555;background-color:#efefef}.swal-button--cancel:hover{background-color:#e8e8e8}.swal-button--cancel:active{background-color:#d7d7d7}.swal-button--cancel:focus{box-shadow:0 0 0 1px #fff,0 0 0 3px rgba(116,136,150,.29)}.swal-button--danger{background-color:#e64942}.swal-button--danger:hover{background-color:#df4740}.swal-button--danger:active{background-color:#cf423b}.swal-button--danger:focus{box-shadow:0 0 0 1px #fff,0 0 0 3px rgba(165,43,43,.29)}.swal-content{padding:0 20px;margin-top:20px}.swal-content:last-child{margin-bottom:20px}.swal-content__input,.swal-content__textarea{-webkit-appearance:none;background-color:#fff;border:none;font-size:14px;display:block;box-sizing:border-box;width:100%;border:1px solid rgba(0,0,0,.14);padding:10px 13px;border-radius:2px;-webkit-transition:border-color .2s;transition:border-color .2s}.swal-content__input:focus,.swal-content__textarea:focus{outline:none;border-color:#6db8ff}.swal-content__textarea{resize:vertical}.swal-button--loading{color:transparent}.swal-button--loading~.swal-button__loader{opacity:1}.swal-button__loader{position:absolute;height:auto;width:43px;z-index:2;left:50%;top:50%;-webkit-transform:translateX(-50%) translateY(-50%);transform:translateX(-50%) translateY(-50%);text-align:center;pointer-events:none;opacity:0}.swal-button__loader div{display:inline-block;float:none;vertical-align:baseline;width:9px;height:9px;padding:0;border:none;margin:2px;opacity:.4;border-radius:7px;background-color:hsla(0,0%,100%,.9);-webkit-transition:background .2s;transition:background .2s;-webkit-animation:swal-loading-anim 1s infinite;animation:swal-loading-anim 1s infinite}.swal-button__loader div:nth-child(3n+2){-webkit-animation-delay:.15s;animation-delay:.15s}.swal-button__loader div:nth-child(3n+3){-webkit-animation-delay:.3s;animation-delay:.3s}@-webkit-keyframes swal-loading-anim{0%{opacity:.4}20%{opacity:.4}50%{opacity:1}to{opacity:.4}}@keyframes swal-loading-anim{0%{opacity:.4}20%{opacity:.4}50%{opacity:1}to{opacity:.4}}.swal-overlay{position:fixed;top:0;bottom:0;left:0;right:0;text-align:center;font-size:0;overflow-y:scroll;background-color:rgba(0,0,0,.4);z-index:10000;pointer-events:none;opacity:0;-webkit-transition:opacity .3s;transition:opacity .3s}.swal-overlay:before{content:" ";display:inline-block;vertical-align:middle;height:100%}.swal-overlay--show-modal{opacity:1;pointer-events:auto}.swal-overlay--show-modal .swal-modal{opacity:1;pointer-events:auto;box-sizing:border-box;-webkit-animation:showSweetAlert .3s;animation:showSweetAlert .3s;will-change:transform}.swal-modal{width:478px;opacity:0;pointer-events:none;background-color:#fff;text-align:center;border-radius:5px;position:static;margin:20px auto;display:inline-block;vertical-align:middle;-webkit-transform:scale(1);transform:scale(1);-webkit-transform-origin:50% 50%;transform-origin:50% 50%;z-index:10001;-webkit-transition:opacity .2s,-webkit-transform .3s;transition:opacity .2s,-webkit-transform .3s;transition:transform .3s,opacity .2s;transition:transform .3s,opacity .2s,-webkit-transform .3s}@media (max-width:500px){.swal-modal{width:calc(100% - 20px)}}@-webkit-keyframes showSweetAlert{0%{-webkit-transform:scale(1);transform:scale(1)}1%{-webkit-transform:scale(.5);transform:scale(.5)}45%{-webkit-transform:scale(1.05);transform:scale(1.05)}80%{-webkit-transform:scale(.95);transform:scale(.95)}to{-webkit-transform:scale(1);transform:scale(1)}}@keyframes showSweetAlert{0%{-webkit-transform:scale(1);transform:scale(1)}1%{-webkit-transform:scale(.5);transform:scale(.5)}45%{-webkit-transform:scale(1.05);transform:scale(1.05)}80%{-webkit-transform:scale(.95);transform:scale(.95)}to{-webkit-transform:scale(1);transform:scale(1)}}',""])},function(t,e){function n(t,e){var n=t[1]||"",r=t[3];if(!r)return n;if(e&&"function"==typeof btoa){var a=o(r);return[n].concat(r.sources.map(function(t){return"/*# sourceURL="+r.sourceRoot+t+" */"})).concat([a]).join("\n")}return[n].join("\n")}function o(t){return"/*# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(unescape(encodeURIComponent(JSON.stringify(t))))+" */"}t.exports=function(t){var e=[];return e.toString=function(){return this.map(function(e){var o=n(e,t);return e[2]?"@media "+e[2]+"{"+o+"}":o}).join("")},e.i=function(t,n){"string"==typeof t&&(t=[[null,t,""]]);for(var o={},r=0;r<this.length;r++){var a=this[r][0];"number"==typeof a&&(o[a]=!0)}for(r=0;r<t.length;r++){var i=t[r];"number"==typeof i[0]&&o[i[0]]||(n&&!i[2]?i[2]=n:n&&(i[2]="("+i[2]+") and ("+n+")"),e.push(i))}},e}},function(t,e,n){function o(t,e){for(var n=0;n<t.length;n++){var o=t[n],r=b[o.id];if(r){r.refs++;for(var a=0;a<r.parts.length;a++)r.parts[a](o.parts[a]);for(;a<o.parts.length;a++)r.parts.push(u(o.parts[a],e))}else{for(var i=[],a=0;a<o.parts.length;a++)i.push(u(o.parts[a],e));b[o.id]={id:o.id,refs:1,parts:i}}}}function r(t,e){for(var n=[],o={},r=0;r<t.length;r++){var a=t[r],i=e.base?a[0]+e.base:a[0],s=a[1],l=a[2],c=a[3],u={css:s,media:l,sourceMap:c};o[i]?o[i].parts.push(u):n.push(o[i]={id:i,parts:[u]})}return n}function a(t,e){var n=g(t.insertInto);if(!n)throw new Error("Couldn't find a style target. This probably means that the value for the 'insertInto' parameter is invalid.");var o=x[x.length-1];if("top"===t.insertAt)o?o.nextSibling?n.insertBefore(e,o.nextSibling):n.appendChild(e):n.insertBefore(e,n.firstChild),x.push(e);else{if("bottom"!==t.insertAt)throw new Error("Invalid value for parameter 'insertAt'. Must be 'top' or 'bottom'.");n.appendChild(e)}}function i(t){if(null===t.parentNode)return!1;t.parentNode.removeChild(t);var e=x.indexOf(t);e>=0&&x.splice(e,1)}function s(t){var e=document.createElement("style");return t.attrs.type="text/css",c(e,t.attrs),a(t,e),e}function l(t){var e=document.createElement("link");return t.attrs.type="text/css",t.attrs.rel="stylesheet",c(e,t.attrs),a(t,e),e}function c(t,e){Object.keys(e).forEach(function(n){t.setAttribute(n,e[n])})}function u(t,e){var n,o,r,a;if(e.transform&&t.css){if(!(a=e.transform(t.css)))return function(){};t.css=a}if(e.singleton){var c=w++;n=v||(v=s(e)),o=d.bind(null,n,c,!1),r=d.bind(null,n,c,!0)}else t.sourceMap&&"function"==typeof URL&&"function"==typeof URL.createObjectURL&&"function"==typeof URL.revokeObjectURL&&"function"==typeof Blob&&"function"==typeof btoa?(n=l(e),o=p.bind(null,n,e),r=function(){i(n),n.href&&URL.revokeObjectURL(n.href)}):(n=s(e),o=f.bind(null,n),r=function(){i(n)});return o(t),function(e){if(e){if(e.css===t.css&&e.media===t.media&&e.sourceMap===t.sourceMap)return;o(t=e)}else r()}}function d(t,e,n,o){var r=n?"":o.css;if(t.styleSheet)t.styleSheet.cssText=y(e,r);else{var a=document.createTextNode(r),i=t.childNodes;i[e]&&t.removeChild(i[e]),i.length?t.insertBefore(a,i[e]):t.appendChild(a)}}function f(t,e){var n=e.css,o=e.media;if(o&&t.setAttribute("media",o),t.styleSheet)t.styleSheet.cssText=n;else{for(;t.firstChild;)t.removeChild(t.firstChild);t.appendChild(document.createTextNode(n))}}function p(t,e,n){var o=n.css,r=n.sourceMap,a=void 0===e.convertToAbsoluteUrls&&r;(e.convertToAbsoluteUrls||a)&&(o=h(o)),r&&(o+="\n/*# sourceMappingURL=data:application/json;base64,"+btoa(unescape(encodeURIComponent(JSON.stringify(r))))+" */");var i=new Blob([o],{type:"text/css"}),s=t.href;t.href=URL.createObjectURL(i),s&&URL.revokeObjectURL(s)}var b={},m=function(t){var e;return function(){return void 0===e&&(e=t.apply(this,arguments)),e}}(function(){return window&&document&&document.all&&!window.atob}),g=function(t){var e={};return function(n){return void 0===e[n]&&(e[n]=t.call(this,n)),e[n]}}(function(t){return document.querySelector(t)}),v=null,w=0,x=[],h=n(15);t.exports=function(t,e){if("undefined"!=typeof DEBUG&&DEBUG&&"object"!=typeof document)throw new Error("The style-loader cannot be used in a non-browser environment");e=e||{},e.attrs="object"==typeof e.attrs?e.attrs:{},e.singleton||(e.singleton=m()),e.insertInto||(e.insertInto="head"),e.insertAt||(e.insertAt="bottom");var n=r(t,e);return o(n,e),function(t){for(var a=[],i=0;i<n.length;i++){var s=n[i],l=b[s.id];l.refs--,a.push(l)}if(t){o(r(t,e),e)}for(var i=0;i<a.length;i++){var l=a[i];if(0===l.refs){for(var c=0;c<l.parts.length;c++)l.parts[c]();delete b[l.id]}}}};var y=function(){var t=[];return function(e,n){return t[e]=n,t.filter(Boolean).join("\n")}}()},function(t,e){t.exports=function(t){var e="undefined"!=typeof window&&window.location;if(!e)throw new Error("fixUrls requires window.location");if(!t||"string"!=typeof t)return t;var n=e.protocol+"//"+e.host,o=n+e.pathname.replace(/\/[^\/]*$/,"/");return t.replace(/url\s*\(((?:[^)(]|\((?:[^)(]+|\([^)(]*\))*\))*)\)/gi,function(t,e){var r=e.trim().replace(/^"(.*)"$/,function(t,e){return e}).replace(/^'(.*)'$/,function(t,e){return e});if(/^(#|data:|http:\/\/|https:\/\/|file:\/\/\/)/i.test(r))return t;var a;return a=0===r.indexOf("//")?r:0===r.indexOf("/")?n+r:o+r.replace(/^\.\//,""),"url("+JSON.stringify(a)+")"})}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(17),r=n(6),a=n(5),i=n(29),s=function(){for(var t=[],e=0;e<arguments.length;e++)t[e]=arguments[e];if("undefined"!=typeof window){var n=i.getOpts.apply(void 0,t);return new Promise(function(t,e){a.default.promise={resolve:t,reject:e},o.default(n),setTimeout(function(){r.openModal()})})}};s.close=r.onAction,s.getState=r.getState,s.setActionValue=a.setActionValue,s.stopLoading=r.stopLoading,s.setDefaults=i.setDefaults,e.default=s},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(0),a=r.default.MODAL,i=n(4),s=n(27),l=n(28),c=n(1);e.init=function(t){o.getNode(a)||(document.body||c.throwErr("You can only use SweetAlert AFTER the DOM has loaded!"),s.default(),i.default()),i.initModalContent(t),l.default(t)},e.default=e.init},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.MODAL;e.modalMarkup='\n  <div class="'+r+'"></div>',e.default=e.modalMarkup},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.OVERLAY,a='<div \n    class="'+r+'"\n    tabIndex="-1">\n  </div>';e.default=a},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.ICON;e.errorIconMarkup=function(){var t=r+"--error",e=t+"__line";return'\n    <div class="'+t+'__x-mark">\n      <span class="'+e+" "+e+'--left"></span>\n      <span class="'+e+" "+e+'--right"></span>\n    </div>\n  '},e.warningIconMarkup=function(){var t=r+"--warning";return'\n    <span class="'+t+'__body">\n      <span class="'+t+'__dot"></span>\n    </span>\n  '},e.successIconMarkup=function(){var t=r+"--success";return'\n    <span class="'+t+"__line "+t+'__line--long"></span>\n    <span class="'+t+"__line "+t+'__line--tip"></span>\n\n    <div class="'+t+'__ring"></div>\n    <div class="'+t+'__hide-corners"></div>\n  '}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.CONTENT;e.contentMarkup='\n  <div class="'+r+'">\n\n  </div>\n'},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.BUTTON_CONTAINER,a=o.default.BUTTON,i=o.default.BUTTON_LOADER;e.buttonMarkup='\n  <div class="'+r+'">\n\n    <button\n      class="'+a+'"\n    ></button>\n\n    <div class="'+i+'">\n      <div></div>\n      <div></div>\n      <div></div>\n    </div>\n\n  </div>\n'},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(4),r=n(2),a=n(0),i=a.default.ICON,s=a.default.ICON_CUSTOM,l=["error","warning","success","info"],c={error:r.errorIconMarkup(),warning:r.warningIconMarkup(),success:r.successIconMarkup()},u=function(t,e){var n=i+"--"+t;e.classList.add(n);var o=c[t];o&&(e.innerHTML=o)},d=function(t,e){e.classList.add(s);var n=document.createElement("img");n.src=t,e.appendChild(n)},f=function(t){if(t){var e=o.injectElIntoModal(r.iconMarkup);l.includes(t)?u(t,e):d(t,e)}};e.default=f},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(2),r=n(4),a=function(t){navigator.userAgent.includes("AppleWebKit")&&(t.style.display="none",t.offsetHeight,t.style.display="")};e.initTitle=function(t){if(t){var e=r.injectElIntoModal(o.titleMarkup);e.textContent=t,a(e)}},e.initText=function(t){if(t){var e=r.injectElIntoModal(o.textMarkup);e.textContent=t,a(e)}}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(4),a=n(0),i=a.default.BUTTON,s=a.default.DANGER_BUTTON,l=n(3),c=n(2),u=n(6),d=n(5),f=function(t,e,n){var r=e.text,a=e.value,f=e.className,p=e.closeModal,b=o.stringToNode(c.buttonMarkup),m=b.querySelector("."+i),g=i+"--"+t;m.classList.add(g),f&&m.classList.add(f),n&&t===l.CONFIRM_KEY&&m.classList.add(s),m.textContent=r;var v={};return v[t]=a,d.setActionValue(v),d.setActionOptionsFor(t,{closeModal:p}),m.addEventListener("click",function(){return u.onAction(t)}),b},p=function(t,e){var n=r.injectElIntoModal(c.footerMarkup);for(var o in t){var a=t[o],i=f(o,a,e);a.visible&&n.appendChild(i)}0===n.children.length&&n.remove()};e.default=p},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(3),r=n(4),a=n(2),i=n(5),s=n(6),l=n(0),c=l.default.CONTENT,u=function(t){t.addEventListener("input",function(t){var e=t.target,n=e.value;i.setActionValue(n)}),t.addEventListener("keyup",function(t){if("Enter"===t.key)return s.onAction(o.CONFIRM_KEY)}),setTimeout(function(){t.focus(),i.setActionValue("")},0)},d=function(t,e,n){var o=document.createElement(e),r=c+"__"+e;o.classList.add(r);for(var a in n){var i=n[a];o[a]=i}"input"===e&&u(o),t.appendChild(o)},f=function(t){if(t){var e=r.injectElIntoModal(a.contentMarkup),n=t.element,o=t.attributes;"string"==typeof n?d(e,n,o):e.appendChild(n)}};e.default=f},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(2),a=function(){var t=o.stringToNode(r.overlayMarkup);document.body.appendChild(t)};e.default=a},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(5),r=n(6),a=n(1),i=n(3),s=n(0),l=s.default.MODAL,c=s.default.BUTTON,u=s.default.OVERLAY,d=function(t){t.preventDefault(),g()},f=function(t){t.preventDefault(),v()},p=function(t){if(o.default.isOpen)switch(t.key){case"Escape":return r.onAction(i.CANCEL_KEY)}},b=function(t){if(o.default.isOpen)switch(t.key){case"Tab":return d(t)}},m=function(t){if(o.default.isOpen)return"Tab"===t.key&&t.shiftKey?f(t):void 0},g=function(){var t=a.getNode(c);t&&(t.tabIndex=0,t.focus())},v=function(){var t=a.getNode(l),e=t.querySelectorAll("."+c),n=e.length-1,o=e[n];o&&o.focus()},w=function(t){t[t.length-1].addEventListener("keydown",b)},x=function(t){t[0].addEventListener("keydown",m)},h=function(){var t=a.getNode(l),e=t.querySelectorAll("."+c);e.length&&(w(e),x(e))},y=function(t){if(a.getNode(u)===t.target)return r.onAction(i.CANCEL_KEY)},k=function(t){var e=a.getNode(u);e.removeEventListener("click",y),t&&e.addEventListener("click",y)},O=function(t){o.default.timer&&clearTimeout(o.default.timer),t&&(o.default.timer=setTimeout(function(){return r.onAction(i.CANCEL_KEY)},t))},_=function(t){t.closeOnEsc?document.addEventListener("keyup",p):document.removeEventListener("keyup",p),t.dangerMode?g():v(),h(),k(t.closeOnClickOutside),O(t.timer)};e.default=_},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(3),a=n(30),i={title:null,text:null,icon:null,buttons:r.defaultButtonList,content:null,className:null,closeOnClickOutside:!0,closeOnEsc:!0,dangerMode:!1,timer:null},s=Object.assign({},i);e.setDefaults=function(t){s=Object.assign({},i,t)};var l=function(t){var e=t&&t.button,n=t&&t.buttons;return void 0!==e&&void 0!==n&&o.throwErr("Cannot set both 'button' and 'buttons' options!"),void 0!==e?{confirm:e}:n},c=function(t){return o.ordinalSuffixOf(t+1)},u=function(t,e){o.throwErr(c(e)+" argument ('"+t+"') is invalid")},d=function(t,e){var n=t+1,r=e[n];o.isPlainObject(r)||void 0===r||o.throwErr("Expected "+c(n)+" argument ('"+r+"') to be a plain object")},f=function(t,e){var n=t+1,r=e[n];void 0!==r&&o.throwErr("Unexpected "+c(n)+" argument ("+r+")")},p=function(t,e,n,r){var a=typeof e,i="string"===a,s=e instanceof Element;if(i){if(0===n)return{text:e};if(1===n)return{text:e,title:r[0]};if(2===n)return d(n,r),{icon:e};u(e,n)}else{if(s&&0===n)return d(n,r),{content:e};if(o.isPlainObject(e))return f(n,r),e;u(e,n)}};e.getOpts=function(){for(var t=[],e=0;e<arguments.length;e++)t[e]=arguments[e];var n={};t.forEach(function(e,o){var r=p(0,e,o,t);Object.assign(n,r)});var o=l(n);return n.buttons=r.getButtonListOpts(o),delete n.button,n.content=a.getContentOpts(n.content),Object.assign({},i,s,n)}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r={element:"input",attributes:{placeholder:""}};e.getContentOpts=function(t){var e={};return o.isPlainObject(t)?Object.assign(e,t):t instanceof Element?{element:t}:"input"===t?r:null}}])});
+
+/***/ }),
+
+/***/ "./node_modules/_toastr@2.1.2@toastr/build/toastr.min.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!function(e){!(__WEBPACK_AMD_DEFINE_ARRAY__ = [__webpack_require__("./node_modules/_jquery@3.2.1@jquery/dist/jquery.js")], __WEBPACK_AMD_DEFINE_RESULT__ = function(e){return function(){function t(e,t,n){return g({type:O.error,iconClass:m().iconClasses.error,message:e,optionsOverride:n,title:t})}function n(t,n){return t||(t=m()),v=e("#"+t.containerId),v.length?v:(n&&(v=u(t)),v)}function i(e,t,n){return g({type:O.info,iconClass:m().iconClasses.info,message:e,optionsOverride:n,title:t})}function o(e){w=e}function s(e,t,n){return g({type:O.success,iconClass:m().iconClasses.success,message:e,optionsOverride:n,title:t})}function a(e,t,n){return g({type:O.warning,iconClass:m().iconClasses.warning,message:e,optionsOverride:n,title:t})}function r(e,t){var i=m();v||n(i),l(e,i,t)||d(i)}function c(t){var i=m();return v||n(i),t&&0===e(":focus",t).length?void h(t):void(v.children().length&&v.remove())}function d(t){for(var n=v.children(),i=n.length-1;i>=0;i--)l(e(n[i]),t)}function l(t,n,i){var o=i&&i.force?i.force:!1;return t&&(o||0===e(":focus",t).length)?(t[n.hideMethod]({duration:n.hideDuration,easing:n.hideEasing,complete:function(){h(t)}}),!0):!1}function u(t){return v=e("<div/>").attr("id",t.containerId).addClass(t.positionClass).attr("aria-live","polite").attr("role","alert"),v.appendTo(e(t.target)),v}function p(){return{tapToDismiss:!0,toastClass:"toast",containerId:"toast-container",debug:!1,showMethod:"fadeIn",showDuration:300,showEasing:"swing",onShown:void 0,hideMethod:"fadeOut",hideDuration:1e3,hideEasing:"swing",onHidden:void 0,closeMethod:!1,closeDuration:!1,closeEasing:!1,extendedTimeOut:1e3,iconClasses:{error:"toast-error",info:"toast-info",success:"toast-success",warning:"toast-warning"},iconClass:"toast-info",positionClass:"toast-top-right",timeOut:5e3,titleClass:"toast-title",messageClass:"toast-message",escapeHtml:!1,target:"body",closeHtml:'<button type="button">&times;</button>',newestOnTop:!0,preventDuplicates:!1,progressBar:!1}}function f(e){w&&w(e)}function g(t){function i(e){return null==e&&(e=""),new String(e).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/'/g,"&#39;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}function o(){r(),d(),l(),u(),p(),c()}function s(){y.hover(b,O),!x.onclick&&x.tapToDismiss&&y.click(w),x.closeButton&&k&&k.click(function(e){e.stopPropagation?e.stopPropagation():void 0!==e.cancelBubble&&e.cancelBubble!==!0&&(e.cancelBubble=!0),w(!0)}),x.onclick&&y.click(function(e){x.onclick(e),w()})}function a(){y.hide(),y[x.showMethod]({duration:x.showDuration,easing:x.showEasing,complete:x.onShown}),x.timeOut>0&&(H=setTimeout(w,x.timeOut),q.maxHideTime=parseFloat(x.timeOut),q.hideEta=(new Date).getTime()+q.maxHideTime,x.progressBar&&(q.intervalId=setInterval(D,10)))}function r(){t.iconClass&&y.addClass(x.toastClass).addClass(E)}function c(){x.newestOnTop?v.prepend(y):v.append(y)}function d(){t.title&&(I.append(x.escapeHtml?i(t.title):t.title).addClass(x.titleClass),y.append(I))}function l(){t.message&&(M.append(x.escapeHtml?i(t.message):t.message).addClass(x.messageClass),y.append(M))}function u(){x.closeButton&&(k.addClass("toast-close-button").attr("role","button"),y.prepend(k))}function p(){x.progressBar&&(B.addClass("toast-progress"),y.prepend(B))}function g(e,t){if(e.preventDuplicates){if(t.message===C)return!0;C=t.message}return!1}function w(t){var n=t&&x.closeMethod!==!1?x.closeMethod:x.hideMethod,i=t&&x.closeDuration!==!1?x.closeDuration:x.hideDuration,o=t&&x.closeEasing!==!1?x.closeEasing:x.hideEasing;return!e(":focus",y).length||t?(clearTimeout(q.intervalId),y[n]({duration:i,easing:o,complete:function(){h(y),x.onHidden&&"hidden"!==j.state&&x.onHidden(),j.state="hidden",j.endTime=new Date,f(j)}})):void 0}function O(){(x.timeOut>0||x.extendedTimeOut>0)&&(H=setTimeout(w,x.extendedTimeOut),q.maxHideTime=parseFloat(x.extendedTimeOut),q.hideEta=(new Date).getTime()+q.maxHideTime)}function b(){clearTimeout(H),q.hideEta=0,y.stop(!0,!0)[x.showMethod]({duration:x.showDuration,easing:x.showEasing})}function D(){var e=(q.hideEta-(new Date).getTime())/q.maxHideTime*100;B.width(e+"%")}var x=m(),E=t.iconClass||x.iconClass;if("undefined"!=typeof t.optionsOverride&&(x=e.extend(x,t.optionsOverride),E=t.optionsOverride.iconClass||E),!g(x,t)){T++,v=n(x,!0);var H=null,y=e("<div/>"),I=e("<div/>"),M=e("<div/>"),B=e("<div/>"),k=e(x.closeHtml),q={intervalId:null,hideEta:null,maxHideTime:null},j={toastId:T,state:"visible",startTime:new Date,options:x,map:t};return o(),a(),s(),f(j),x.debug&&console&&console.log(j),y}}function m(){return e.extend({},p(),b.options)}function h(e){v||(v=n()),e.is(":visible")||(e.remove(),e=null,0===v.children().length&&(v.remove(),C=void 0))}var v,w,C,T=0,O={error:"error",info:"info",success:"success",warning:"warning"},b={clear:r,remove:c,error:t,getContainer:n,info:i,options:{},subscribe:o,success:s,version:"2.1.2",warning:a};return b}()}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__),
+				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__))}(__webpack_require__("./node_modules/_webpack@3.5.5@webpack/buildin/amd-define.js"));
+//# sourceMappingURL=toastr.js.map
+
+/***/ }),
+
+/***/ "./node_modules/_v-textcomplete@0.2.5@v-textcomplete/dist/v-textcomplete.js":
+/***/ (function(module, exports, __webpack_require__) {
+
+!function(t,e){ true?module.exports=e():"function"==typeof define&&define.amd?define([],e):"object"==typeof exports?exports.TextComplete=e():t.TextComplete=e()}(this,function(){return function(t){function e(r){if(n[r])return n[r].exports;var o=n[r]={i:r,l:!1,exports:{}};return t[r].call(o.exports,o,o.exports,e),o.l=!0,o.exports}var n={};return e.m=t,e.c=n,e.i=function(t){return t},e.d=function(t,n,r){e.o(t,n)||Object.defineProperty(t,n,{configurable:!1,enumerable:!0,get:r})},e.n=function(t){var n=t&&t.__esModule?function(){return t.default}:function(){return t};return e.d(n,"a",n),n},e.o=function(t,e){return Object.prototype.hasOwnProperty.call(t,e)},e.p="",e(e.s=11)}([function(t,e,n){t.exports=!n(1)(function(){return 7!=Object.defineProperty({},"a",{get:function(){return 7}}).a})},function(t,e){t.exports=function(t){try{return!!t()}catch(t){return!0}}},function(t,e){var n=t.exports="undefined"!=typeof window&&window.Math==Math?window:"undefined"!=typeof self&&self.Math==Math?self:Function("return this")();"number"==typeof __g&&(__g=n)},function(t,e){t.exports=function(t){return"object"==typeof t?null!==t:"function"==typeof t}},function(t,e){var n=t.exports={version:"2.5.1"};"number"==typeof __e&&(__e=n)},function(t,e){t.exports=function(t){if(void 0==t)throw TypeError("Can't call method on  "+t);return t}},function(t,e,n){var r=n(19);t.exports=Object("z").propertyIsEnumerable(0)?Object:function(t){return"String"==r(t)?t.split(""):Object(t)}},function(t,e){var n=Math.ceil,r=Math.floor;t.exports=function(t){return isNaN(t=+t)?0:(t>0?r:n)(t)}},function(t,e,n){var r=n(6),o=n(5);t.exports=function(t){return r(o(t))}},function(t,e,n){n(47);var r=n(45)(n(13),n(46),"data-v-49ec89dc",null);t.exports=r.exports},function(t,e,n){"use strict";function r(t){var e=window.getComputedStyle(t),n=e.getPropertyValue("box-sizing"),r=parseFloat(e.getPropertyValue("padding-bottom"))+parseFloat(e.getPropertyValue("padding-top")),o=parseFloat(e.getPropertyValue("border-bottom-width"))+parseFloat(e.getPropertyValue("border-top-width"));return{contextStyle:c.map(function(t){return t+":"+e.getPropertyValue(t)}).join(";"),paddingSize:r,borderSize:o,boxSizing:n}}function o(t){var e=arguments.length>1&&void 0!==arguments[1]?arguments[1]:null,n=arguments.length>2&&void 0!==arguments[2]?arguments[2]:null;i||(i=document.createElement("textarea"),document.body.appendChild(i));var o=r(t),c=o.paddingSize,s=o.borderSize,u=o.boxSizing,l=o.contextStyle;i.setAttribute("style",l+";"+a),i.value=t.value||t.placeholder||"";var d=i.scrollHeight;"border-box"===u?d+=s:"content-box"===u&&(d-=c),i.value="";var f=i.scrollHeight-c;if(null!==e){var p=f*e;"border-box"===u&&(p=p+c+s),d=Math.max(p,d)}if(null!==n){var h=f*n;"border-box"===u&&(h=h+c+s),d=Math.min(h,d)}return{height:d+"px"}}e.a=o;var i=void 0,a="\n  height:0 !important;\n  visibility:hidden !important;\n  overflow:hidden !important;\n  position:absolute !important;\n  z-index:-1000 !important;\n  top:0 !important;\n  right:0 !important\n",c=["letter-spacing","line-height","padding-top","padding-bottom","font-family","font-weight","font-size","text-rendering","text-transform","width","text-indent","padding-left","padding-right","border-width","box-sizing"]},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=n(9),o=n.n(r);e.default=o.a},function(t,e,n){"use strict";var r="UP";e.a={methods:{keyEvent:function(t){if(this.showList){switch(this.getCode(t)){case"ENTER":this.actived.value&&(t.preventDefault(),this.emitEnterEvent());break;case r:t.preventDefault(),this.emitMoveEvent(r);break;case"DOWN":t.preventDefault(),this.emitMoveEvent("DOWN")}this.$emit("key-down",t)}},keyUp:function(t){this.$emit("key-up",t)},emitEnterEvent:function(){this.selectList(this.actived.value),this.showList=!1,this.actived.value="",this.actived.index=0},emitMoveEvent:function(t){var e=this.list.length;t==r?this.actived.index=""==this.actived.value||0==this.actived.index?e-1:this.actived.index-1:"DOWN"==t&&(this.actived.index=""==this.actived.value||this.actived.index==e-1?0:this.actived.index+1),this.actived.value=this.list[this.actived.index]},getCode:function(t){return 8===t.keyCode?"BS":9===t.keyCode?"ENTER":13===t.keyCode?"ENTER":38===t.keyCode?r:40===t.keyCode?"DOWN":83===t.keyCode&&t.shiftKey?"DOWN":87===t.keyCode&&t.shiftKey?r:"OTHER"}}}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=n(14),o=n.n(r),i=n(10),a=n(44),c=n.n(a),s=n(12);e.default={mixins:[s.a],props:{resize:String,value:String,boxClass:String,areaClass:String,placeholder:String,autosize:{type:[Boolean,Object],default:!1},lineHeight:{type:Number,default:20},strategies:{type:Array,default:function(){return[]}},selectedDefaultFirst:{type:Boolean,default:!0},rows:{type:Number,default:2}},data:function(){return{id:Math.random().toString(36).substr(5),content:this.value,showList:!1,cursor:0,list:[],matched:[],match:"",actived:{value:"",index:0},template:function(){},replace:function(){},textareaCalcStyle:{}}},mounted:function(){this.resizeTextarea()},computed:{textareaStyle:function(){return o()({"line-height":this.lineHeight+"px",resize:this.resize},this.textareaCalcStyle)}},watch:{value:function(){this.change(),this.resizeTextarea()}},methods:{handleFocus:function(t){this.$emit("focus",t)},resizeTextarea:function(){var t=this.autosize;if(t){var e=t.minRows,r=t.maxRows;this.textareaCalcStyle=n.i(i.a)(this.$refs.textarea,e,r)}},updateValue:function(t){this.$refs.textarea.value=t,this.$emit("input",t)},change:function(){var t=this,e=this;this.strategies.forEach(function(n){var r=document.getElementById("autocomplete-"+e.id),o=document.getElementById("v-textcomplete-"+e.id),i=o.value.substring(0,o.selectionEnd),a="";if(null!=(a=i.match(n.match))){var s=a[2].replace(/(^\s*)|(\s*$)/g,""),u=e.getCursorPosition(o),l=e.getElementScroll(o),d=c()(o,u),f=d.top+e.lineHeight-l.top,p=d.left+o.offsetLeft,h=document.documentElement.offsetHeight;e.template=n.template,e.match=n.match,e.replace=n.replace,void 0!=n.list&&n.list.length>0&&""==a[2]?e.list=n.list:n.remote?(e.list=[],n.remote(s,function(t){0!==t.length&&(e.list=t,n.search(s,e.getList),e.showList=!0)})):n.search(s,e.getList),h-o.getBoundingClientRect().top<e.lineHeight*t.list.length?r.style.top=-e.lineHeight*t.list.length-2*f+"px":r.style.top=f+"px",r.style.left=p+"px",e.matched.push(a)}else e.matched.push(null)});var n=this.matched.filter(function(t){return null!=t}).length>0;this.showList=!!(n&&this.list.length>0),this.showList||(this.actived.value="",this.actived.index=0),this.selectedDefaultFirst&&(this.actived.value=this.list[0]),this.matched=[]},getElementOffset:function(t){var e=t.getBoundingClientRect(),n=t.ownerDocument,r=n.defaultView,o=n.documentElement,i={top:e.top+r.pageYOffset,left:e.left+r.pageXOffset};return o&&(i.top-=o.clientTop,i.left-=o.clientLeft),i},getList:function(t){this.list=t},selectList:function(t){var e=document.getElementById("v-textcomplete-"+this.id),n=this.getCursorPosition(e),r=e.value.substring(0,e.selectionEnd),o=e.value.slice(e.selectionEnd);if(!r.match(this.match))return this.setCaretPosition(e,n),this.showList=!1,this.actived.value="",void(this.actived.index=0);var i=r.replace(this.match,this.replace(t));this.updateValue(i+o),e.focus();var a=i.length;this.setCaretPosition(e,a),this.showList=!1,this.actived.value="",this.actived.index=0},getCursorPosition:function(t){var e=0;if(document.selection){t.focus();var n=document.selection.createRange();n.moveStart("character",-t.value.length),e=n.text.length}else(t.selectionStart||"0"==t.selectionStart)&&(e=t.selectionStart);return e},getElementScroll:function(t){return{top:t.scrollTop,left:t.scrollLeft}},setCaretPosition:function(t,e){if(t.setSelectionRange)t.focus(),setTimeout(function(){return t.setSelectionRange(e,e)},1);else if(t.createTextRange){var n=t.createTextRange();n.collapse(!0),n.moveEnd("character",e),n.moveStart("character",e),n.select()}}}}},function(t,e,n){t.exports={default:n(15),__esModule:!0}},function(t,e,n){n(41),t.exports=n(4).Object.assign},function(t,e){t.exports=function(t){if("function"!=typeof t)throw TypeError(t+" is not a function!");return t}},function(t,e,n){var r=n(3);t.exports=function(t){if(!r(t))throw TypeError(t+" is not an object!");return t}},function(t,e,n){var r=n(8),o=n(37),i=n(36);t.exports=function(t){return function(e,n,a){var c,s=r(e),u=o(s.length),l=i(a,u);if(t&&n!=n){for(;u>l;)if((c=s[l++])!=c)return!0}else for(;u>l;l++)if((t||l in s)&&s[l]===n)return t||l||0;return!t&&-1}}},function(t,e){var n={}.toString;t.exports=function(t){return n.call(t).slice(8,-1)}},function(t,e,n){var r=n(16);t.exports=function(t,e,n){if(r(t),void 0===e)return t;switch(n){case 1:return function(n){return t.call(e,n)};case 2:return function(n,r){return t.call(e,n,r)};case 3:return function(n,r,o){return t.call(e,n,r,o)}}return function(){return t.apply(e,arguments)}}},function(t,e,n){var r=n(3),o=n(2).document,i=r(o)&&r(o.createElement);t.exports=function(t){return i?o.createElement(t):{}}},function(t,e){t.exports="constructor,hasOwnProperty,isPrototypeOf,propertyIsEnumerable,toLocaleString,toString,valueOf".split(",")},function(t,e,n){var r=n(2),o=n(4),i=n(20),a=n(25),c=function(t,e,n){var s,u,l,d=t&c.F,f=t&c.G,p=t&c.S,h=t&c.P,v=t&c.B,m=t&c.W,g=f?o:o[e]||(o[e]={}),x=g.prototype,b=f?r:p?r[e]:(r[e]||{}).prototype;f&&(n=e);for(s in n)(u=!d&&b&&void 0!==b[s])&&s in g||(l=u?b[s]:n[s],g[s]=f&&"function"!=typeof b[s]?n[s]:v&&u?i(l,r):m&&b[s]==l?function(t){var e=function(e,n,r){if(this instanceof t){switch(arguments.length){case 0:return new t;case 1:return new t(e);case 2:return new t(e,n)}return new t(e,n,r)}return t.apply(this,arguments)};return e.prototype=t.prototype,e}(l):h&&"function"==typeof l?i(Function.call,l):l,h&&((g.virtual||(g.virtual={}))[s]=l,t&c.R&&x&&!x[s]&&a(x,s,l)))};c.F=1,c.G=2,c.S=4,c.P=8,c.B=16,c.W=32,c.U=64,c.R=128,t.exports=c},function(t,e){var n={}.hasOwnProperty;t.exports=function(t,e){return n.call(t,e)}},function(t,e,n){var r=n(28),o=n(33);t.exports=n(0)?function(t,e,n){return r.f(t,e,o(1,n))}:function(t,e,n){return t[e]=n,t}},function(t,e,n){t.exports=!n(0)&&!n(1)(function(){return 7!=Object.defineProperty(n(21)("div"),"a",{get:function(){return 7}}).a})},function(t,e,n){"use strict";var r=n(31),o=n(29),i=n(32),a=n(38),c=n(6),s=Object.assign;t.exports=!s||n(1)(function(){var t={},e={},n=Symbol(),r="abcdefghijklmnopqrst";return t[n]=7,r.split("").forEach(function(t){e[t]=t}),7!=s({},t)[n]||Object.keys(s({},e)).join("")!=r})?function(t,e){for(var n=a(t),s=arguments.length,u=1,l=o.f,d=i.f;s>u;)for(var f,p=c(arguments[u++]),h=l?r(p).concat(l(p)):r(p),v=h.length,m=0;v>m;)d.call(p,f=h[m++])&&(n[f]=p[f]);return n}:s},function(t,e,n){var r=n(17),o=n(26),i=n(39),a=Object.defineProperty;e.f=n(0)?Object.defineProperty:function(t,e,n){if(r(t),e=i(e,!0),r(n),o)try{return a(t,e,n)}catch(t){}if("get"in n||"set"in n)throw TypeError("Accessors not supported!");return"value"in n&&(t[e]=n.value),t}},function(t,e){e.f=Object.getOwnPropertySymbols},function(t,e,n){var r=n(24),o=n(8),i=n(18)(!1),a=n(34)("IE_PROTO");t.exports=function(t,e){var n,c=o(t),s=0,u=[];for(n in c)n!=a&&r(c,n)&&u.push(n);for(;e.length>s;)r(c,n=e[s++])&&(~i(u,n)||u.push(n));return u}},function(t,e,n){var r=n(30),o=n(22);t.exports=Object.keys||function(t){return r(t,o)}},function(t,e){e.f={}.propertyIsEnumerable},function(t,e){t.exports=function(t,e){return{enumerable:!(1&t),configurable:!(2&t),writable:!(4&t),value:e}}},function(t,e,n){var r=n(35)("keys"),o=n(40);t.exports=function(t){return r[t]||(r[t]=o(t))}},function(t,e,n){var r=n(2),o=r["__core-js_shared__"]||(r["__core-js_shared__"]={});t.exports=function(t){return o[t]||(o[t]={})}},function(t,e,n){var r=n(7),o=Math.max,i=Math.min;t.exports=function(t,e){return t=r(t),t<0?o(t+e,0):i(t,e)}},function(t,e,n){var r=n(7),o=Math.min;t.exports=function(t){return t>0?o(r(t),9007199254740991):0}},function(t,e,n){var r=n(5);t.exports=function(t){return Object(r(t))}},function(t,e,n){var r=n(3);t.exports=function(t,e){if(!r(t))return t;var n,o;if(e&&"function"==typeof(n=t.toString)&&!r(o=n.call(t)))return o;if("function"==typeof(n=t.valueOf)&&!r(o=n.call(t)))return o;if(!e&&"function"==typeof(n=t.toString)&&!r(o=n.call(t)))return o;throw TypeError("Can't convert object to primitive value")}},function(t,e){var n=0,r=Math.random();t.exports=function(t){return"Symbol(".concat(void 0===t?"":t,")_",(++n+r).toString(36))}},function(t,e,n){var r=n(23);r(r.S+r.F,"Object",{assign:n(27)})},function(t,e,n){e=t.exports=n(43)(),e.push([t.i,"\n.complete-box[data-v-49ec89dc] {\n  position: relative;\n}\ntextarea[data-v-49ec89dc] {\n  overflow: auto;\n}\n.v-textcomplete__inner[data-v-49ec89dc] {\n  color: #1f2d3d;\n  border: 1px solid #bfcbd9;\n  padding: 5px 7px;\n  font-size: 14px;\n  line-height: 1.5;\n  box-sizing: border-box;\n  width: 100%;\n  font-size: 14px;\n  color: #1f2d3d;\n  background-color: #fff;\n  background-image: none;\n  border: 1px solid #bfcbd9;\n  border-radius: 4px;\n  transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);\n}\n.v-textcomplete__inner[data-v-49ec89dc]:hover {\n    border-color: #8391a5;\n}\n.v-textcomplete__inner[data-v-49ec89dc]:focus {\n    outline: 0;\n    border-color: #20a0ff;\n}\n.v-textcomplete__inner[data-v-49ec89dc]::-webkit-input-placeholder {\n    color: #97a8be;\n}\n.v-textcomplete__inner[data-v-49ec89dc]::-moz-placeholder {\n    color: #97a8be;\n}\n.v-textcomplete__inner[data-v-49ec89dc]:-ms-input-placeholder {\n    color: #97a8be;\n}\n.v-textcomplete__inner[data-v-49ec89dc]::placeholder {\n    color: #97a8be;\n}\n.autocomplete[data-v-49ec89dc] {\n  background-color: #fff;\n  position: absolute;\n  z-index: 1000;\n}\n.autocomplete ul[data-v-49ec89dc] {\n  list-style: none;\n  padding-left: 0;\n  border: 1px #f3f5f7 solid;\n  border-radius: 3px;\n  margin: 0;\n}\n.autocomplete ul li[data-v-49ec89dc] {\n    padding-left: 5px;\n    padding-right: 5px;\n    border-bottom: 1px solid #f3f5f7;\n    cursor: pointer;\n}\n.autocomplete ul li[data-v-49ec89dc]:hover {\n      background-color: #f3f5f7;\n}\n.autocomplete ul li span small[data-v-49ec89dc] {\n      padding-left: 10px;\n}\n.autocomplete ul .active[data-v-49ec89dc] {\n    background-color: #f3f5f7;\n}\n",""])},function(t,e){t.exports=function(){var t=[];return t.toString=function(){for(var t=[],e=0;e<this.length;e++){var n=this[e];n[2]?t.push("@media "+n[2]+"{"+n[1]+"}"):t.push(n[1])}return t.join("")},t.i=function(e,n){"string"==typeof e&&(e=[[null,e,""]]);for(var r={},o=0;o<this.length;o++){var i=this[o][0];"number"==typeof i&&(r[i]=!0)}for(o=0;o<e.length;o++){var a=e[o];"number"==typeof a[0]&&r[a[0]]||(n&&!a[2]?a[2]=n:n&&(a[2]="("+a[2]+") and ("+n+")"),t.push(a))}},t}},function(t,e){!function(){function e(t,e,i){if(!r)throw new Error("textarea-caret-position#getCaretCoordinates should only be called in a browser");var a=i&&i.debug||!1;if(a){var c=document.querySelector("#input-textarea-caret-position-mirror-div");c&&c.parentNode.removeChild(c)}var s=document.createElement("div");s.id="input-textarea-caret-position-mirror-div",document.body.appendChild(s);var u=s.style,l=window.getComputedStyle?getComputedStyle(t):t.currentStyle;u.whiteSpace="pre-wrap","INPUT"!==t.nodeName&&(u.wordWrap="break-word"),u.position="absolute",a||(u.visibility="hidden"),n.forEach(function(t){u[t]=l[t]}),o?t.scrollHeight>parseInt(l.height)&&(u.overflowY="scroll"):u.overflow="hidden",s.textContent=t.value.substring(0,e),"INPUT"===t.nodeName&&(s.textContent=s.textContent.replace(/\s/g," "));var d=document.createElement("span");d.textContent=t.value.substring(e)||".",s.appendChild(d);var f={top:d.offsetTop+parseInt(l.borderTopWidth),left:d.offsetLeft+parseInt(l.borderLeftWidth)};return a?d.style.backgroundColor="#aaa":document.body.removeChild(s),f}var n=["direction","boxSizing","width","height","overflowX","overflowY","borderTopWidth","borderRightWidth","borderBottomWidth","borderLeftWidth","borderStyle","paddingTop","paddingRight","paddingBottom","paddingLeft","fontStyle","fontVariant","fontWeight","fontStretch","fontSize","fontSizeAdjust","lineHeight","fontFamily","textAlign","textTransform","textIndent","textDecoration","letterSpacing","wordSpacing","tabSize","MozTabSize"],r="undefined"!=typeof window,o=r&&null!=window.mozInnerScreenX;void 0!==t&&void 0!==t.exports?t.exports=e:r&&(window.getCaretCoordinates=e)}()},function(t,e){t.exports=function(t,e,n,r){var o,i=t=t||{},a=typeof t.default;"object"!==a&&"function"!==a||(o=t,i=t.default);var c="function"==typeof i?i.options:i;if(e&&(c.render=e.render,c.staticRenderFns=e.staticRenderFns),n&&(c._scopeId=n),r){var s=c.computed||(c.computed={});Object.keys(r).forEach(function(t){var e=r[t];s[t]=function(){return e}})}return{esModule:o,exports:i,options:c}}},function(t,e){t.exports={render:function(){var t=this,e=t.$createElement,n=t._self._c||e;return n("div",{class:["complete-box",t.boxClass]},[n("textarea",{ref:"textarea",class:["v-textcomplete__inner",t.areaClass],style:t.textareaStyle,attrs:{id:"v-textcomplete-"+t.id,placeholder:t.placeholder,rows:t.rows,name:"textcomplete"},domProps:{value:t.value},on:{input:function(e){t.updateValue(e.target.value)},focus:t.handleFocus,keydown:t.keyEvent,keyup:t.keyUp}}),t._v(" "),n("div",{directives:[{name:"show",rawName:"v-show",value:t.showList,expression:"showList"}],staticClass:"autocomplete transition",attrs:{id:"autocomplete-"+t.id}},[n("ul",t._l(t.list,function(e,r){return n("li",{class:t.actived.value==e?"active":"",domProps:{innerHTML:t._s(t.template(e))},on:{click:function(n){t.selectList(e)}}})}))])])},staticRenderFns:[]}},function(t,e,n){var r=n(42);"string"==typeof r&&(r=[[t.i,r,""]]),r.locals&&(t.exports=r.locals);n(48)("26cdfa1a",r,!0)},function(t,e,n){function r(t){for(var e=0;e<t.length;e++){var n=t[e],r=l[n.id];if(r){r.refs++;for(var o=0;o<r.parts.length;o++)r.parts[o](n.parts[o]);for(;o<n.parts.length;o++)r.parts.push(i(n.parts[o]));r.parts.length>n.parts.length&&(r.parts.length=n.parts.length)}else{for(var a=[],o=0;o<n.parts.length;o++)a.push(i(n.parts[o]));l[n.id]={id:n.id,refs:1,parts:a}}}}function o(){var t=document.createElement("style");return t.type="text/css",d.appendChild(t),t}function i(t){var e,n,r=document.querySelector('style[data-vue-ssr-id~="'+t.id+'"]');if(r){if(h)return v;r.parentNode.removeChild(r)}if(m){var i=p++;r=f||(f=o()),e=a.bind(null,r,i,!1),n=a.bind(null,r,i,!0)}else r=o(),e=c.bind(null,r),n=function(){r.parentNode.removeChild(r)};return e(t),function(r){if(r){if(r.css===t.css&&r.media===t.media&&r.sourceMap===t.sourceMap)return;e(t=r)}else n()}}function a(t,e,n,r){var o=n?"":r.css;if(t.styleSheet)t.styleSheet.cssText=g(e,o);else{var i=document.createTextNode(o),a=t.childNodes;a[e]&&t.removeChild(a[e]),a.length?t.insertBefore(i,a[e]):t.appendChild(i)}}function c(t,e){var n=e.css,r=e.media,o=e.sourceMap;if(r&&t.setAttribute("media",r),o&&(n+="\n/*# sourceURL="+o.sources[0]+" */",n+="\n/*# sourceMappingURL=data:application/json;base64,"+btoa(unescape(encodeURIComponent(JSON.stringify(o))))+" */"),t.styleSheet)t.styleSheet.cssText=n;else{for(;t.firstChild;)t.removeChild(t.firstChild);t.appendChild(document.createTextNode(n))}}var s="undefined"!=typeof document;if("undefined"!=typeof DEBUG&&DEBUG&&!s)throw new Error("vue-style-loader cannot be used in a non-browser environment. Use { target: 'node' } in your Webpack config to indicate a server-rendering environment.");var u=n(49),l={},d=s&&(document.head||document.getElementsByTagName("head")[0]),f=null,p=0,h=!1,v=function(){},m="undefined"!=typeof navigator&&/msie [6-9]\b/.test(navigator.userAgent.toLowerCase());t.exports=function(t,e,n){h=n;var o=u(t,e);return r(o),function(e){for(var n=[],i=0;i<o.length;i++){var a=o[i],c=l[a.id];c.refs--,n.push(c)}e?(o=u(t,e),r(o)):o=[];for(var i=0;i<n.length;i++){var c=n[i];if(0===c.refs){for(var s=0;s<c.parts.length;s++)c.parts[s]();delete l[c.id]}}}};var g=function(){var t=[];return function(e,n){return t[e]=n,t.filter(Boolean).join("\n")}}()},function(t,e){t.exports=function(t,e){for(var n=[],r={},o=0;o<e.length;o++){var i=e[o],a=i[0],c=i[1],s=i[2],u=i[3],l={id:t+":"+o,css:c,media:s,sourceMap:u};r[a]?r[a].parts.push(l):n.push(r[a]={id:a,parts:[l]})}return n}}])});
+
+/***/ }),
+
 /***/ "./node_modules/_vue-loader@12.2.2@vue-loader/lib/component-normalizer.js":
 /***/ (function(module, exports) {
 
@@ -14720,6 +24393,184 @@ if (false) {
   module.hot.accept()
   if (module.hot.data) {
      require("vue-loader/node_modules/vue-hot-reload-api").rerender("data-v-403e59a6", module.exports)
+  }
+}
+
+/***/ }),
+
+/***/ "./node_modules/_vue-loader@12.2.2@vue-loader/lib/template-compiler/index.js?{\"id\":\"data-v-4fbca059\",\"hasScoped\":false}!./node_modules/_vue-loader@12.2.2@vue-loader/lib/selector.js?type=template&index=0!./resources/assets/js/components/Comment.vue":
+/***/ (function(module, exports, __webpack_require__) {
+
+module.exports={render:function (){var _vm=this;var _h=_vm.$createElement;var _c=_vm._self._c||_h;
+  return _c('div', {
+    staticClass: "container"
+  }, [_c('div', {
+    staticClass: "row comment"
+  }, [_c('div', {
+    staticClass: "col-md-8 col-md-offset-2"
+  }, [_c('h5', [_vm._v(_vm._s(_vm.title))])]), _vm._v(" "), _c('div', {
+    class: _vm.contentWrapperClass
+  }, [(_vm.comments.length == 0) ? _c('div', {
+    class: _vm.nullClass
+  }, [_vm._v(_vm._s(_vm.nullText))]) : _vm._l((_vm.comments), function(comment, index) {
+    return _c('div', {
+      staticClass: "media"
+    }, [_c('div', {
+      staticClass: "media-left"
+    }, [_c('a', {
+      attrs: {
+        "href": '/user/' + comment.username
+      }
+    }, [_c('img', {
+      staticClass: "media-object img-circle",
+      attrs: {
+        "src": comment.avatar
+      }
+    })])]), _vm._v(" "), _c('div', {
+      staticClass: "media-body box-body"
+    }, [_c('div', {
+      staticClass: "heading"
+    }, [_c('i', {
+      staticClass: "ion-person"
+    }), _c('a', {
+      attrs: {
+        "href": '/user/' + comment.username
+      }
+    }, [_vm._v(_vm._s(comment.username))]), _vm._v("\n                            \n                        "), _c('i', {
+      staticClass: "ion-clock"
+    }), _vm._v(_vm._s(comment.created_at) + "\n                        "), _c('span', {
+      staticClass: "pull-right operate"
+    }, [(_vm.username != comment.username) ? _c('vote-button', {
+      attrs: {
+        "item": comment
+      }
+    }) : _vm._e(), _vm._v(" "), (_vm.username == comment.username) ? _c('a', {
+      attrs: {
+        "href": "javascript:;"
+      },
+      on: {
+        "click": function($event) {
+          _vm.commentDelete(index, comment.id)
+        }
+      }
+    }, [_c('i', {
+      staticClass: "ion-trash-b"
+    })]) : _vm._e(), _vm._v(" "), _c('a', {
+      attrs: {
+        "href": "javascript:;"
+      },
+      on: {
+        "click": function($event) {
+          _vm.reply(comment.username)
+        }
+      }
+    }, [_c('i', {
+      staticClass: "ion-ios-undo"
+    })])], 1)]), _vm._v(" "), _c('div', {
+      staticClass: "comment-body markdown",
+      class: comment.is_down_voted ? 'downvoted' : '',
+      domProps: {
+        "innerHTML": _vm._s(comment.content_html)
+      }
+    })])])
+  }), _vm._v(" "), (_vm.canComment) ? _c('form', {
+    staticClass: "form-horizontal",
+    staticStyle: {
+      "margin-top": "30px"
+    },
+    on: {
+      "submit": function($event) {
+        $event.preventDefault();
+        _vm.comment($event)
+      }
+    }
+  }, [_c('div', {
+    staticClass: "form-group"
+  }, [_c('label', {
+    staticClass: "col-sm-2 control-label own-avatar"
+  }, [_c('a', {
+    attrs: {
+      "href": '/user/' + _vm.username
+    }
+  }, [_c('img', {
+    staticClass: "img-circle",
+    attrs: {
+      "src": _vm.userAvatar
+    }
+  })])]), _vm._v(" "), _c('div', {
+    staticClass: "col-sm-10"
+  }, [_c('text-complete', {
+    attrs: {
+      "id": "content",
+      "area-class": "form-control",
+      "placeholder": "Markdown",
+      "rows": 7,
+      "strategies": _vm.strategies
+    },
+    model: {
+      value: (_vm.content),
+      callback: function($$v) {
+        _vm.content = $$v
+      },
+      expression: "content"
+    }
+  })], 1)]), _vm._v(" "), _c('div', {
+    staticClass: "form-group"
+  }, [_c('div', {
+    staticClass: "col-sm-12"
+  }, [_c('button', {
+    staticClass: "btn btn-success pull-right",
+    attrs: {
+      "type": "submit",
+      "disabled": _vm.isSubmiting ? true : false
+    }
+  }, [_vm._v(_vm._s(_vm.$t('form.submit_comment')))])])])]) : _vm._e()], 2)])])
+},staticRenderFns: []}
+module.exports.render._withStripped = true
+if (false) {
+  module.hot.accept()
+  if (module.hot.data) {
+     require("vue-loader/node_modules/vue-hot-reload-api").rerender("data-v-4fbca059", module.exports)
+  }
+}
+
+/***/ }),
+
+/***/ "./node_modules/_vue-loader@12.2.2@vue-loader/lib/template-compiler/index.js?{\"id\":\"data-v-7430b932\",\"hasScoped\":false}!./node_modules/_vue-loader@12.2.2@vue-loader/lib/selector.js?type=template&index=0!./resources/assets/js/components/VoteButton.vue":
+/***/ (function(module, exports, __webpack_require__) {
+
+module.exports={render:function (){var _vm=this;var _h=_vm.$createElement;var _c=_vm._self._c||_h;
+  return _c('span', {
+    staticClass: "vote-button"
+  }, [_c('a', {
+    attrs: {
+      "href": "javascript:;"
+    },
+    on: {
+      "click": function($event) {
+        _vm.upVote(_vm.item.id)
+      }
+    }
+  }, [_c('i', {
+    class: _vm.item.is_up_voted ? 'ion-happy text-success' : 'ion-happy-outline'
+  }), _vm._v(" "), (_vm.item.vote_count > 0) ? _c('small', [_vm._v(_vm._s(_vm.item.vote_count))]) : _vm._e()]), _vm._v(" "), _c('a', {
+    attrs: {
+      "href": "javascript:;"
+    },
+    on: {
+      "click": function($event) {
+        _vm.downVote(_vm.item.id)
+      }
+    }
+  }, [_c('i', {
+    class: _vm.item.is_down_voted ? 'ion-sad text-danger' : 'ion-sad-outline'
+  })])])
+},staticRenderFns: []}
+module.exports.render._withStripped = true
+if (false) {
+  module.hot.accept()
+  if (module.hot.data) {
+     require("vue-loader/node_modules/vue-hot-reload-api").rerender("data-v-7430b932", module.exports)
   }
 }
 
@@ -24821,6 +34672,16 @@ module.exports = Vue$3;
 
 /***/ }),
 
+/***/ "./node_modules/_webpack@3.5.5@webpack/buildin/amd-define.js":
+/***/ (function(module, exports) {
+
+module.exports = function() {
+	throw new Error("define cannot be used indirect");
+};
+
+
+/***/ }),
+
 /***/ "./node_modules/_webpack@3.5.5@webpack/buildin/global.js":
 /***/ (function(module, exports) {
 
@@ -24845,6 +34706,47 @@ try {
 // easier to handle this case. if(!global) { ...}
 
 module.exports = g;
+
+
+/***/ }),
+
+/***/ "./resources/assets/js/components/Comment.vue":
+/***/ (function(module, exports, __webpack_require__) {
+
+var disposed = false
+var Component = __webpack_require__("./node_modules/_vue-loader@12.2.2@vue-loader/lib/component-normalizer.js")(
+  /* script */
+  __webpack_require__("./node_modules/_babel-loader@7.1.2@babel-loader/lib/index.js?{\"cacheDirectory\":true,\"presets\":[[\"env\",{\"modules\":false,\"targets\":{\"browsers\":[\"> 2%\"],\"uglify\":true}}]]}!./node_modules/_vue-loader@12.2.2@vue-loader/lib/selector.js?type=script&index=0!./resources/assets/js/components/Comment.vue"),
+  /* template */
+  __webpack_require__("./node_modules/_vue-loader@12.2.2@vue-loader/lib/template-compiler/index.js?{\"id\":\"data-v-4fbca059\",\"hasScoped\":false}!./node_modules/_vue-loader@12.2.2@vue-loader/lib/selector.js?type=template&index=0!./resources/assets/js/components/Comment.vue"),
+  /* styles */
+  null,
+  /* scopeId */
+  null,
+  /* moduleIdentifier (server only) */
+  null
+)
+Component.options.__file = "/usr/share/nginx/html/blog/resources/assets/js/components/Comment.vue"
+if (Component.esModule && Object.keys(Component.esModule).some(function (key) {return key !== "default" && key.substr(0, 2) !== "__"})) {console.error("named exports are not supported in *.vue files.")}
+if (Component.options.functional) {console.error("[vue-loader] Comment.vue: functional components are not supported with templates, they should use render functions.")}
+
+/* hot reload */
+if (false) {(function () {
+  var hotAPI = require("vue-loader/node_modules/vue-hot-reload-api")
+  hotAPI.install(require("vue"), false)
+  if (!hotAPI.compatible) return
+  module.hot.accept()
+  if (!module.hot.data) {
+    hotAPI.createRecord("data-v-4fbca059", Component.options)
+  } else {
+    hotAPI.reload("data-v-4fbca059", Component.options)
+  }
+  module.hot.dispose(function (data) {
+    disposed = true
+  })
+})()}
+
+module.exports = Component.exports
 
 
 /***/ }),
@@ -24890,20 +34792,1703 @@ module.exports = Component.exports
 
 /***/ }),
 
-/***/ "./resources/assets/js/home.js":
+/***/ "./resources/assets/js/components/VoteButton.vue":
 /***/ (function(module, exports, __webpack_require__) {
 
+var disposed = false
+var Component = __webpack_require__("./node_modules/_vue-loader@12.2.2@vue-loader/lib/component-normalizer.js")(
+  /* script */
+  __webpack_require__("./node_modules/_babel-loader@7.1.2@babel-loader/lib/index.js?{\"cacheDirectory\":true,\"presets\":[[\"env\",{\"modules\":false,\"targets\":{\"browsers\":[\"> 2%\"],\"uglify\":true}}]]}!./node_modules/_vue-loader@12.2.2@vue-loader/lib/selector.js?type=script&index=0!./resources/assets/js/components/VoteButton.vue"),
+  /* template */
+  __webpack_require__("./node_modules/_vue-loader@12.2.2@vue-loader/lib/template-compiler/index.js?{\"id\":\"data-v-7430b932\",\"hasScoped\":false}!./node_modules/_vue-loader@12.2.2@vue-loader/lib/selector.js?type=template&index=0!./resources/assets/js/components/VoteButton.vue"),
+  /* styles */
+  null,
+  /* scopeId */
+  null,
+  /* moduleIdentifier (server only) */
+  null
+)
+Component.options.__file = "/usr/share/nginx/html/blog/resources/assets/js/components/VoteButton.vue"
+if (Component.esModule && Object.keys(Component.esModule).some(function (key) {return key !== "default" && key.substr(0, 2) !== "__"})) {console.error("named exports are not supported in *.vue files.")}
+if (Component.options.functional) {console.error("[vue-loader] VoteButton.vue: functional components are not supported with templates, they should use render functions.")}
+
+/* hot reload */
+if (false) {(function () {
+  var hotAPI = require("vue-loader/node_modules/vue-hot-reload-api")
+  hotAPI.install(require("vue"), false)
+  if (!hotAPI.compatible) return
+  module.hot.accept()
+  if (!module.hot.data) {
+    hotAPI.createRecord("data-v-7430b932", Component.options)
+  } else {
+    hotAPI.reload("data-v-7430b932", Component.options)
+  }
+  module.hot.dispose(function (data) {
+    disposed = true
+  })
+})()}
+
+module.exports = Component.exports
+
+
+/***/ }),
+
+/***/ "./resources/assets/js/config/base.js":
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return apiUrl; });
+var apiUrl = '/api/';
+
+/***/ }),
+
+/***/ "./resources/assets/js/config/helper.js":
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony export (immutable) */ __webpack_exports__["a"] = stack_error;
+function stack_error(response) {
+    if (typeof response.data == 'string') {
+        toastr.error(response.status + ' ' + response.statusText);
+    } else {
+        var data = response.data;
+        var content = '';
+
+        Object.keys(data).map(function (key, index) {
+            var value = data[key];
+
+            content += '<span style="color: #e74c3c">' + value[0] + '</span><br>';
+        });
+
+        swal({
+            title: "Error Text!",
+            type: 'error',
+            text: content,
+            html: true
+        });
+    }
+}
+
+/***/ }),
+
+/***/ "./resources/assets/js/config/toastr.js":
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony default export */ __webpack_exports__["a"] = ({
+    positionClass: "toast-bottom-right",
+    showDuration: "300",
+    hideDuration: "1000",
+    timeOut: "5000",
+    extendedTimeOut: "1000",
+    showEasing: "swing",
+    hideEasing: "linear",
+    showMethod: "fadeIn",
+    hideMethod: "fadeOut"
+});
+
+/***/ }),
+
+/***/ "./resources/assets/js/home.js":
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_plugins_http__ = __webpack_require__("./resources/assets/js/plugins/http/index.js");
 window.$ = window.jQuery = __webpack_require__("./node_modules/_jquery@3.2.1@jquery/dist/jquery.js");
+window.swal = __webpack_require__("./node_modules/_sweetalert@2.0.2@sweetalert/dist/sweetalert.min.js");
 window.Vue = __webpack_require__("./node_modules/_vue@2.4.2@vue/dist/vue.common.js");
+
+
 
 __webpack_require__("./node_modules/_bootstrap-sass@3.3.7@bootstrap-sass/assets/javascripts/bootstrap.js");
 window.marked = __webpack_require__("./node_modules/_marked@0.3.6@marked/lib/marked.js");
 window.hljs = __webpack_require__("./resources/assets/js/vendor/highlight.min.js");
+window.toastr = __webpack_require__("./node_modules/_toastr@2.1.2@toastr/build/toastr.min.js");
+
+Vue.use(__WEBPACK_IMPORTED_MODULE_0_plugins_http__["a" /* default */]);
+
+Vue.component('comment', __webpack_require__("./resources/assets/js/components/Comment.vue"));
 
 Vue.component('parse', __webpack_require__("./resources/assets/js/components/Parse.vue"));
 
 var app = new Vue({
     el: '#app'
+});
+
+/***/ }),
+
+/***/ "./resources/assets/js/plugins/http/index.js":
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* unused harmony export http */
+/* harmony export (immutable) */ __webpack_exports__["a"] = install;
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_axios__ = __webpack_require__("./node_modules/_axios@0.16.2@axios/index.js");
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_axios___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_0_axios__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1_config_base__ = __webpack_require__("./resources/assets/js/config/base.js");
+
+
+
+/**
+ * Create Axios
+ */
+var http = __WEBPACK_IMPORTED_MODULE_0_axios___default.a.create({
+  baseURL: __WEBPACK_IMPORTED_MODULE_1_config_base__["a" /* apiUrl */]
+});
+
+/**
+ * We'll load the axios HTTP library which allows us to easily issue requests
+ * to our Laravel back-end. This library automatically handles sending the
+ * CSRF token as a header based on the value of the "XSRF" token cookie.
+ */
+http.defaults.headers.common = {
+  'X-CSRF-TOKEN': window.Laravel.csrfToken,
+  'X-Requested-With': 'XMLHttpRequest'
+};
+
+/**
+ * Handle all error messages.
+ */
+http.interceptors.response.use(function (response) {
+  return response;
+}, function (error) {
+  var response = error.response;
+
+
+  if ([401].indexOf(response.status) >= 0) {
+    if (response.status == 401 && response.data.error.message != 'Unauthorized') {
+      return Promise.reject(response);
+    }
+    window.location = '/login';
+  }
+
+  return Promise.reject(error);
+});
+
+function install(Vue) {
+  Object.defineProperty(Vue.prototype, '$http', {
+    get: function get() {
+      return http;
+    }
+  });
+}
+
+/***/ }),
+
+/***/ "./resources/assets/js/vendor/github_emoji.js":
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony default export */ __webpack_exports__["a"] = ({
+  '+1': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44d.png?v7',
+  '-1': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44e.png?v7',
+  '100': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4af.png?v7',
+  '1234': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f522.png?v7',
+  '1st_place_medal': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f947.png?v7',
+  '2nd_place_medal': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f948.png?v7',
+  '3rd_place_medal': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f949.png?v7',
+  '8ball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b1.png?v7',
+  'a': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f170.png?v7',
+  'ab': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f18e.png?v7',
+  'abc': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f524.png?v7',
+  'abcd': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f521.png?v7',
+  'accept': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f251.png?v7',
+  'aerial_tramway': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a1.png?v7',
+  'afghanistan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1eb.png?v7',
+  'airplane': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2708.png?v7',
+  'aland_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1fd.png?v7',
+  'alarm_clock': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23f0.png?v7',
+  'albania': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1f1.png?v7',
+  'alembic': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2697.png?v7',
+  'algeria': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e9-1f1ff.png?v7',
+  'alien': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f47d.png?v7',
+  'ambulance': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f691.png?v7',
+  'american_samoa': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1f8.png?v7',
+  'amphora': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3fa.png?v7',
+  'anchor': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2693.png?v7',
+  'andorra': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1e9.png?v7',
+  'angel': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f47c.png?v7',
+  'anger': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a2.png?v7',
+  'angola': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1f4.png?v7',
+  'angry': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f620.png?v7',
+  'anguilla': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1ee.png?v7',
+  'anguished': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f627.png?v7',
+  'ant': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f41c.png?v7',
+  'antarctica': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1f6.png?v7',
+  'antigua_barbuda': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1ec.png?v7',
+  'apple': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f34e.png?v7',
+  'aquarius': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2652.png?v7',
+  'argentina': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1f7.png?v7',
+  'aries': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2648.png?v7',
+  'armenia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1f2.png?v7',
+  'arrow_backward': 'https://assets-cdn.github.com/images/icons/emoji/unicode/25c0.png?v7',
+  'arrow_double_down': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23ec.png?v7',
+  'arrow_double_up': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23eb.png?v7',
+  'arrow_down': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2b07.png?v7',
+  'arrow_down_small': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f53d.png?v7',
+  'arrow_forward': 'https://assets-cdn.github.com/images/icons/emoji/unicode/25b6.png?v7',
+  'arrow_heading_down': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2935.png?v7',
+  'arrow_heading_up': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2934.png?v7',
+  'arrow_left': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2b05.png?v7',
+  'arrow_lower_left': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2199.png?v7',
+  'arrow_lower_right': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2198.png?v7',
+  'arrow_right': 'https://assets-cdn.github.com/images/icons/emoji/unicode/27a1.png?v7',
+  'arrow_right_hook': 'https://assets-cdn.github.com/images/icons/emoji/unicode/21aa.png?v7',
+  'arrow_up': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2b06.png?v7',
+  'arrow_up_down': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2195.png?v7',
+  'arrow_up_small': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f53c.png?v7',
+  'arrow_upper_left': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2196.png?v7',
+  'arrow_upper_right': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2197.png?v7',
+  'arrows_clockwise': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f503.png?v7',
+  'arrows_counterclockwise': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f504.png?v7',
+  'art': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a8.png?v7',
+  'articulated_lorry': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f69b.png?v7',
+  'artificial_satellite': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6f0.png?v7',
+  'aruba': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1fc.png?v7',
+  'asterisk': 'https://assets-cdn.github.com/images/icons/emoji/unicode/002a-20e3.png?v7',
+  'astonished': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f632.png?v7',
+  'athletic_shoe': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f45f.png?v7',
+  'atm': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e7.png?v7',
+  'atom': 'https://assets-cdn.github.com/images/icons/emoji/atom.png?v7',
+  'atom_symbol': 'https://assets-cdn.github.com/images/icons/emoji/unicode/269b.png?v7',
+  'australia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1fa.png?v7',
+  'austria': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1f9.png?v7',
+  'avocado': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f951.png?v7',
+  'azerbaijan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1ff.png?v7',
+  'b': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f171.png?v7',
+  'baby': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f476.png?v7',
+  'baby_bottle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f37c.png?v7',
+  'baby_chick': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f424.png?v7',
+  'baby_symbol': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6bc.png?v7',
+  'back': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f519.png?v7',
+  'bacon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f953.png?v7',
+  'badminton': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3f8.png?v7',
+  'baggage_claim': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6c4.png?v7',
+  'baguette_bread': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f956.png?v7',
+  'bahamas': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1f8.png?v7',
+  'bahrain': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1ed.png?v7',
+  'balance_scale': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2696.png?v7',
+  'balloon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f388.png?v7',
+  'ballot_box': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5f3.png?v7',
+  'ballot_box_with_check': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2611.png?v7',
+  'bamboo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f38d.png?v7',
+  'banana': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f34c.png?v7',
+  'bangbang': 'https://assets-cdn.github.com/images/icons/emoji/unicode/203c.png?v7',
+  'bangladesh': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1e9.png?v7',
+  'bank': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e6.png?v7',
+  'bar_chart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ca.png?v7',
+  'barbados': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1e7.png?v7',
+  'barber': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f488.png?v7',
+  'baseball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26be.png?v7',
+  'basecamp': 'https://assets-cdn.github.com/images/icons/emoji/basecamp.png?v7',
+  'basecampy': 'https://assets-cdn.github.com/images/icons/emoji/basecampy.png?v7',
+  'basketball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c0.png?v7',
+  'basketball_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f9.png?v7',
+  'basketball_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f9-2640.png?v7',
+  'bat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f987.png?v7',
+  'bath': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6c0.png?v7',
+  'bathtub': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6c1.png?v7',
+  'battery': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f50b.png?v7',
+  'beach_umbrella': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d6.png?v7',
+  'bear': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f43b.png?v7',
+  'bed': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6cf.png?v7',
+  'bee': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f41d.png?v7',
+  'beer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f37a.png?v7',
+  'beers': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f37b.png?v7',
+  'beetle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f41e.png?v7',
+  'beginner': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f530.png?v7',
+  'belarus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1fe.png?v7',
+  'belgium': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1ea.png?v7',
+  'belize': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1ff.png?v7',
+  'bell': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f514.png?v7',
+  'bellhop_bell': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6ce.png?v7',
+  'benin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1ef.png?v7',
+  'bento': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f371.png?v7',
+  'bermuda': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1f2.png?v7',
+  'bhutan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1f9.png?v7',
+  'bicyclist': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b4.png?v7',
+  'bike': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b2.png?v7',
+  'biking_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b4.png?v7',
+  'biking_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b4-2640.png?v7',
+  'bikini': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f459.png?v7',
+  'biohazard': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2623.png?v7',
+  'bird': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f426.png?v7',
+  'birthday': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f382.png?v7',
+  'black_circle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26ab.png?v7',
+  'black_flag': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3f4.png?v7',
+  'black_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5a4.png?v7',
+  'black_joker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f0cf.png?v7',
+  'black_large_square': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2b1b.png?v7',
+  'black_medium_small_square': 'https://assets-cdn.github.com/images/icons/emoji/unicode/25fe.png?v7',
+  'black_medium_square': 'https://assets-cdn.github.com/images/icons/emoji/unicode/25fc.png?v7',
+  'black_nib': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2712.png?v7',
+  'black_small_square': 'https://assets-cdn.github.com/images/icons/emoji/unicode/25aa.png?v7',
+  'black_square_button': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f532.png?v7',
+  'blonde_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f471.png?v7',
+  'blonde_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f471-2640.png?v7',
+  'blossom': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f33c.png?v7',
+  'blowfish': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f421.png?v7',
+  'blue_book': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d8.png?v7',
+  'blue_car': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f699.png?v7',
+  'blue_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f499.png?v7',
+  'blush': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f60a.png?v7',
+  'boar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f417.png?v7',
+  'boat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f5.png?v7',
+  'bolivia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1f4.png?v7',
+  'bomb': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a3.png?v7',
+  'book': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d6.png?v7',
+  'bookmark': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f516.png?v7',
+  'bookmark_tabs': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d1.png?v7',
+  'books': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4da.png?v7',
+  'boom': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a5.png?v7',
+  'boot': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f462.png?v7',
+  'bosnia_herzegovina': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1e6.png?v7',
+  'botswana': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1fc.png?v7',
+  'bouquet': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f490.png?v7',
+  'bow': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f647.png?v7',
+  'bow_and_arrow': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3f9.png?v7',
+  'bowing_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f647.png?v7',
+  'bowing_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f647-2640.png?v7',
+  'bowling': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b3.png?v7',
+  'bowtie': 'https://assets-cdn.github.com/images/icons/emoji/bowtie.png?v7',
+  'boxing_glove': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f94a.png?v7',
+  'boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f466.png?v7',
+  'brazil': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1f7.png?v7',
+  'bread': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f35e.png?v7',
+  'bride_with_veil': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f470.png?v7',
+  'bridge_at_night': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f309.png?v7',
+  'briefcase': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4bc.png?v7',
+  'british_indian_ocean_territory': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1f4.png?v7',
+  'british_virgin_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fb-1f1ec.png?v7',
+  'broken_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f494.png?v7',
+  'brunei': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1f3.png?v7',
+  'bug': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f41b.png?v7',
+  'building_construction': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d7.png?v7',
+  'bulb': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a1.png?v7',
+  'bulgaria': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1ec.png?v7',
+  'bullettrain_front': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f685.png?v7',
+  'bullettrain_side': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f684.png?v7',
+  'burkina_faso': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1eb.png?v7',
+  'burrito': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f32f.png?v7',
+  'burundi': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1ee.png?v7',
+  'bus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f68c.png?v7',
+  'business_suit_levitating': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f574.png?v7',
+  'busstop': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f68f.png?v7',
+  'bust_in_silhouette': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f464.png?v7',
+  'busts_in_silhouette': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f465.png?v7',
+  'butterfly': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f98b.png?v7',
+  'cactus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f335.png?v7',
+  'cake': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f370.png?v7',
+  'calendar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c6.png?v7',
+  'call_me_hand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f919.png?v7',
+  'calling': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f2.png?v7',
+  'cambodia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1ed.png?v7',
+  'camel': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f42b.png?v7',
+  'camera': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f7.png?v7',
+  'camera_flash': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f8.png?v7',
+  'cameroon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1f2.png?v7',
+  'camping': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d5.png?v7',
+  'canada': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1e6.png?v7',
+  'canary_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1e8.png?v7',
+  'cancer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/264b.png?v7',
+  'candle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f56f.png?v7',
+  'candy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f36c.png?v7',
+  'canoe': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6f6.png?v7',
+  'cape_verde': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1fb.png?v7',
+  'capital_abcd': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f520.png?v7',
+  'capricorn': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2651.png?v7',
+  'car': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f697.png?v7',
+  'card_file_box': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5c3.png?v7',
+  'card_index': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c7.png?v7',
+  'card_index_dividers': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5c2.png?v7',
+  'caribbean_netherlands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1f6.png?v7',
+  'carousel_horse': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a0.png?v7',
+  'carrot': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f955.png?v7',
+  'cat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f431.png?v7',
+  'cat2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f408.png?v7',
+  'cayman_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1fe.png?v7',
+  'cd': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4bf.png?v7',
+  'central_african_republic': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1eb.png?v7',
+  'chad': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1e9.png?v7',
+  'chains': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26d3.png?v7',
+  'champagne': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f37e.png?v7',
+  'chart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b9.png?v7',
+  'chart_with_downwards_trend': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c9.png?v7',
+  'chart_with_upwards_trend': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c8.png?v7',
+  'checkered_flag': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c1.png?v7',
+  'cheese': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f9c0.png?v7',
+  'cherries': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f352.png?v7',
+  'cherry_blossom': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f338.png?v7',
+  'chestnut': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f330.png?v7',
+  'chicken': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f414.png?v7',
+  'children_crossing': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b8.png?v7',
+  'chile': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1f1.png?v7',
+  'chipmunk': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f43f.png?v7',
+  'chocolate_bar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f36b.png?v7',
+  'christmas_island': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1fd.png?v7',
+  'christmas_tree': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f384.png?v7',
+  'church': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26ea.png?v7',
+  'cinema': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a6.png?v7',
+  'circus_tent': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3aa.png?v7',
+  'city_sunrise': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f307.png?v7',
+  'city_sunset': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f306.png?v7',
+  'cityscape': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d9.png?v7',
+  'cl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f191.png?v7',
+  'clamp': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5dc.png?v7',
+  'clap': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44f.png?v7',
+  'clapper': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ac.png?v7',
+  'classical_building': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3db.png?v7',
+  'clinking_glasses': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f942.png?v7',
+  'clipboard': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4cb.png?v7',
+  'clock1': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f550.png?v7',
+  'clock10': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f559.png?v7',
+  'clock1030': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f565.png?v7',
+  'clock11': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f55a.png?v7',
+  'clock1130': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f566.png?v7',
+  'clock12': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f55b.png?v7',
+  'clock1230': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f567.png?v7',
+  'clock130': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f55c.png?v7',
+  'clock2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f551.png?v7',
+  'clock230': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f55d.png?v7',
+  'clock3': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f552.png?v7',
+  'clock330': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f55e.png?v7',
+  'clock4': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f553.png?v7',
+  'clock430': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f55f.png?v7',
+  'clock5': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f554.png?v7',
+  'clock530': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f560.png?v7',
+  'clock6': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f555.png?v7',
+  'clock630': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f561.png?v7',
+  'clock7': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f556.png?v7',
+  'clock730': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f562.png?v7',
+  'clock8': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f557.png?v7',
+  'clock830': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f563.png?v7',
+  'clock9': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f558.png?v7',
+  'clock930': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f564.png?v7',
+  'closed_book': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d5.png?v7',
+  'closed_lock_with_key': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f510.png?v7',
+  'closed_umbrella': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f302.png?v7',
+  'cloud': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2601.png?v7',
+  'cloud_with_lightning': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f329.png?v7',
+  'cloud_with_lightning_and_rain': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26c8.png?v7',
+  'cloud_with_rain': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f327.png?v7',
+  'cloud_with_snow': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f328.png?v7',
+  'clown_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f921.png?v7',
+  'clubs': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2663.png?v7',
+  'cn': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1f3.png?v7',
+  'cocktail': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f378.png?v7',
+  'cocos_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1e8.png?v7',
+  'coffee': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2615.png?v7',
+  'coffin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26b0.png?v7',
+  'cold_sweat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f630.png?v7',
+  'collision': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a5.png?v7',
+  'colombia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1f4.png?v7',
+  'comet': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2604.png?v7',
+  'comoros': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1f2.png?v7',
+  'computer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4bb.png?v7',
+  'computer_mouse': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5b1.png?v7',
+  'confetti_ball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f38a.png?v7',
+  'confounded': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f616.png?v7',
+  'confused': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f615.png?v7',
+  'congo_brazzaville': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1ec.png?v7',
+  'congo_kinshasa': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1e9.png?v7',
+  'congratulations': 'https://assets-cdn.github.com/images/icons/emoji/unicode/3297.png?v7',
+  'construction': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a7.png?v7',
+  'construction_worker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f477.png?v7',
+  'construction_worker_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f477.png?v7',
+  'construction_worker_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f477-2640.png?v7',
+  'control_knobs': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f39b.png?v7',
+  'convenience_store': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ea.png?v7',
+  'cook_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1f0.png?v7',
+  'cookie': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f36a.png?v7',
+  'cool': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f192.png?v7',
+  'cop': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46e.png?v7',
+  'copyright': 'https://assets-cdn.github.com/images/icons/emoji/unicode/00a9.png?v7',
+  'corn': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f33d.png?v7',
+  'costa_rica': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1f7.png?v7',
+  'cote_divoire': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1ee.png?v7',
+  'couch_and_lamp': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6cb.png?v7',
+  'couple': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46b.png?v7',
+  'couple_with_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f491.png?v7',
+  'couple_with_heart_man_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-2764-1f468.png?v7',
+  'couple_with_heart_woman_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f491.png?v7',
+  'couple_with_heart_woman_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-2764-1f469.png?v7',
+  'couplekiss_man_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-2764-1f48b-1f468.png?v7',
+  'couplekiss_man_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f48f.png?v7',
+  'couplekiss_woman_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-2764-1f48b-1f469.png?v7',
+  'cow': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f42e.png?v7',
+  'cow2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f404.png?v7',
+  'cowboy_hat_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f920.png?v7',
+  'crab': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f980.png?v7',
+  'crayon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f58d.png?v7',
+  'credit_card': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b3.png?v7',
+  'crescent_moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f319.png?v7',
+  'cricket': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3cf.png?v7',
+  'croatia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ed-1f1f7.png?v7',
+  'crocodile': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f40a.png?v7',
+  'croissant': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f950.png?v7',
+  'crossed_fingers': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f91e.png?v7',
+  'crossed_flags': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f38c.png?v7',
+  'crossed_swords': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2694.png?v7',
+  'crown': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f451.png?v7',
+  'cry': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f622.png?v7',
+  'crying_cat_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f63f.png?v7',
+  'crystal_ball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f52e.png?v7',
+  'cuba': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1fa.png?v7',
+  'cucumber': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f952.png?v7',
+  'cupid': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f498.png?v7',
+  'curacao': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1fc.png?v7',
+  'curly_loop': 'https://assets-cdn.github.com/images/icons/emoji/unicode/27b0.png?v7',
+  'currency_exchange': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b1.png?v7',
+  'curry': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f35b.png?v7',
+  'custard': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f36e.png?v7',
+  'customs': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6c3.png?v7',
+  'cyclone': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f300.png?v7',
+  'cyprus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1fe.png?v7',
+  'czech_republic': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1ff.png?v7',
+  'dagger': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5e1.png?v7',
+  'dancer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f483.png?v7',
+  'dancers': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46f.png?v7',
+  'dancing_men': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46f-2642.png?v7',
+  'dancing_women': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46f.png?v7',
+  'dango': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f361.png?v7',
+  'dark_sunglasses': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f576.png?v7',
+  'dart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3af.png?v7',
+  'dash': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a8.png?v7',
+  'date': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c5.png?v7',
+  'de': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e9-1f1ea.png?v7',
+  'deciduous_tree': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f333.png?v7',
+  'deer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f98c.png?v7',
+  'denmark': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e9-1f1f0.png?v7',
+  'department_store': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ec.png?v7',
+  'derelict_house': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3da.png?v7',
+  'desert': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3dc.png?v7',
+  'desert_island': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3dd.png?v7',
+  'desktop_computer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5a5.png?v7',
+  'detective': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f575.png?v7',
+  'diamond_shape_with_a_dot_inside': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a0.png?v7',
+  'diamonds': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2666.png?v7',
+  'disappointed': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f61e.png?v7',
+  'disappointed_relieved': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f625.png?v7',
+  'dizzy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ab.png?v7',
+  'dizzy_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f635.png?v7',
+  'djibouti': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e9-1f1ef.png?v7',
+  'do_not_litter': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6af.png?v7',
+  'dog': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f436.png?v7',
+  'dog2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f415.png?v7',
+  'dollar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b5.png?v7',
+  'dolls': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f38e.png?v7',
+  'dolphin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f42c.png?v7',
+  'dominica': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e9-1f1f2.png?v7',
+  'dominican_republic': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e9-1f1f4.png?v7',
+  'door': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6aa.png?v7',
+  'doughnut': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f369.png?v7',
+  'dove': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f54a.png?v7',
+  'dragon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f409.png?v7',
+  'dragon_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f432.png?v7',
+  'dress': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f457.png?v7',
+  'dromedary_camel': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f42a.png?v7',
+  'drooling_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f924.png?v7',
+  'droplet': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a7.png?v7',
+  'drum': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f941.png?v7',
+  'duck': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f986.png?v7',
+  'dvd': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c0.png?v7',
+  'e-mail': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e7.png?v7',
+  'eagle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f985.png?v7',
+  'ear': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f442.png?v7',
+  'ear_of_rice': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f33e.png?v7',
+  'earth_africa': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f30d.png?v7',
+  'earth_americas': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f30e.png?v7',
+  'earth_asia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f30f.png?v7',
+  'ecuador': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ea-1f1e8.png?v7',
+  'egg': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f95a.png?v7',
+  'eggplant': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f346.png?v7',
+  'egypt': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ea-1f1ec.png?v7',
+  'eight': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0038-20e3.png?v7',
+  'eight_pointed_black_star': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2734.png?v7',
+  'eight_spoked_asterisk': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2733.png?v7',
+  'el_salvador': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1fb.png?v7',
+  'electric_plug': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f50c.png?v7',
+  'electron': 'https://assets-cdn.github.com/images/icons/emoji/electron.png?v7',
+  'elephant': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f418.png?v7',
+  'email': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2709.png?v7',
+  'end': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f51a.png?v7',
+  'envelope': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2709.png?v7',
+  'envelope_with_arrow': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e9.png?v7',
+  'equatorial_guinea': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1f6.png?v7',
+  'eritrea': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ea-1f1f7.png?v7',
+  'es': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ea-1f1f8.png?v7',
+  'estonia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ea-1f1ea.png?v7',
+  'ethiopia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ea-1f1f9.png?v7',
+  'eu': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ea-1f1fa.png?v7',
+  'euro': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b6.png?v7',
+  'european_castle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3f0.png?v7',
+  'european_post_office': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e4.png?v7',
+  'european_union': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ea-1f1fa.png?v7',
+  'evergreen_tree': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f332.png?v7',
+  'exclamation': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2757.png?v7',
+  'expressionless': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f611.png?v7',
+  'eye': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f441.png?v7',
+  'eye_speech_bubble': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f441-1f5e8.png?v7',
+  'eyeglasses': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f453.png?v7',
+  'eyes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f440.png?v7',
+  'face_with_head_bandage': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f915.png?v7',
+  'face_with_thermometer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f912.png?v7',
+  'facepunch': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44a.png?v7',
+  'factory': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ed.png?v7',
+  'falkland_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1eb-1f1f0.png?v7',
+  'fallen_leaf': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f342.png?v7',
+  'family': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46a.png?v7',
+  'family_man_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f466.png?v7',
+  'family_man_boy_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f466-1f466.png?v7',
+  'family_man_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f467.png?v7',
+  'family_man_girl_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f467-1f466.png?v7',
+  'family_man_girl_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f467-1f467.png?v7',
+  'family_man_man_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f468-1f466.png?v7',
+  'family_man_man_boy_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f468-1f466-1f466.png?v7',
+  'family_man_man_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f468-1f467.png?v7',
+  'family_man_man_girl_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f468-1f467-1f466.png?v7',
+  'family_man_man_girl_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f468-1f467-1f467.png?v7',
+  'family_man_woman_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46a.png?v7',
+  'family_man_woman_boy_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f469-1f466-1f466.png?v7',
+  'family_man_woman_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f469-1f467.png?v7',
+  'family_man_woman_girl_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f469-1f467-1f466.png?v7',
+  'family_man_woman_girl_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f469-1f467-1f467.png?v7',
+  'family_woman_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f466.png?v7',
+  'family_woman_boy_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f466-1f466.png?v7',
+  'family_woman_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f467.png?v7',
+  'family_woman_girl_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f467-1f466.png?v7',
+  'family_woman_girl_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f467-1f467.png?v7',
+  'family_woman_woman_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f469-1f466.png?v7',
+  'family_woman_woman_boy_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f469-1f466-1f466.png?v7',
+  'family_woman_woman_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f469-1f467.png?v7',
+  'family_woman_woman_girl_boy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f469-1f467-1f466.png?v7',
+  'family_woman_woman_girl_girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f469-1f467-1f467.png?v7',
+  'faroe_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1eb-1f1f4.png?v7',
+  'fast_forward': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23e9.png?v7',
+  'fax': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e0.png?v7',
+  'fearful': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f628.png?v7',
+  'feelsgood': 'https://assets-cdn.github.com/images/icons/emoji/feelsgood.png?v7',
+  'feet': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f43e.png?v7',
+  'female_detective': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f575-2640.png?v7',
+  'ferris_wheel': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a1.png?v7',
+  'ferry': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f4.png?v7',
+  'field_hockey': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d1.png?v7',
+  'fiji': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1eb-1f1ef.png?v7',
+  'file_cabinet': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5c4.png?v7',
+  'file_folder': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c1.png?v7',
+  'film_projector': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4fd.png?v7',
+  'film_strip': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f39e.png?v7',
+  'finland': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1eb-1f1ee.png?v7',
+  'finnadie': 'https://assets-cdn.github.com/images/icons/emoji/finnadie.png?v7',
+  'fire': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f525.png?v7',
+  'fire_engine': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f692.png?v7',
+  'fireworks': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f386.png?v7',
+  'first_quarter_moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f313.png?v7',
+  'first_quarter_moon_with_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f31b.png?v7',
+  'fish': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f41f.png?v7',
+  'fish_cake': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f365.png?v7',
+  'fishing_pole_and_fish': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a3.png?v7',
+  'fist': 'https://assets-cdn.github.com/images/icons/emoji/unicode/270a.png?v7',
+  'fist_left': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f91b.png?v7',
+  'fist_oncoming': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44a.png?v7',
+  'fist_raised': 'https://assets-cdn.github.com/images/icons/emoji/unicode/270a.png?v7',
+  'fist_right': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f91c.png?v7',
+  'five': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0035-20e3.png?v7',
+  'flags': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f38f.png?v7',
+  'flashlight': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f526.png?v7',
+  'fleur_de_lis': 'https://assets-cdn.github.com/images/icons/emoji/unicode/269c.png?v7',
+  'flight_arrival': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6ec.png?v7',
+  'flight_departure': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6eb.png?v7',
+  'flipper': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f42c.png?v7',
+  'floppy_disk': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4be.png?v7',
+  'flower_playing_cards': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b4.png?v7',
+  'flushed': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f633.png?v7',
+  'fog': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f32b.png?v7',
+  'foggy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f301.png?v7',
+  'football': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c8.png?v7',
+  'footprints': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f463.png?v7',
+  'fork_and_knife': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f374.png?v7',
+  'fountain': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f2.png?v7',
+  'fountain_pen': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f58b.png?v7',
+  'four': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0034-20e3.png?v7',
+  'four_leaf_clover': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f340.png?v7',
+  'fox_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f98a.png?v7',
+  'fr': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1eb-1f1f7.png?v7',
+  'framed_picture': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5bc.png?v7',
+  'free': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f193.png?v7',
+  'french_guiana': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1eb.png?v7',
+  'french_polynesia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1eb.png?v7',
+  'french_southern_territories': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1eb.png?v7',
+  'fried_egg': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f373.png?v7',
+  'fried_shrimp': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f364.png?v7',
+  'fries': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f35f.png?v7',
+  'frog': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f438.png?v7',
+  'frowning': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f626.png?v7',
+  'frowning_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2639.png?v7',
+  'frowning_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64d-2642.png?v7',
+  'frowning_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64d.png?v7',
+  'fu': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f595.png?v7',
+  'fuelpump': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26fd.png?v7',
+  'full_moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f315.png?v7',
+  'full_moon_with_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f31d.png?v7',
+  'funeral_urn': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26b1.png?v7',
+  'gabon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1e6.png?v7',
+  'gambia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1f2.png?v7',
+  'game_die': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b2.png?v7',
+  'gb': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1e7.png?v7',
+  'gear': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2699.png?v7',
+  'gem': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f48e.png?v7',
+  'gemini': 'https://assets-cdn.github.com/images/icons/emoji/unicode/264a.png?v7',
+  'georgia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1ea.png?v7',
+  'ghana': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1ed.png?v7',
+  'ghost': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f47b.png?v7',
+  'gibraltar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1ee.png?v7',
+  'gift': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f381.png?v7',
+  'gift_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f49d.png?v7',
+  'girl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f467.png?v7',
+  'globe_with_meridians': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f310.png?v7',
+  'goal_net': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f945.png?v7',
+  'goat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f410.png?v7',
+  'goberserk': 'https://assets-cdn.github.com/images/icons/emoji/goberserk.png?v7',
+  'godmode': 'https://assets-cdn.github.com/images/icons/emoji/godmode.png?v7',
+  'golf': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f3.png?v7',
+  'golfing_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3cc.png?v7',
+  'golfing_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3cc-2640.png?v7',
+  'gorilla': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f98d.png?v7',
+  'grapes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f347.png?v7',
+  'greece': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1f7.png?v7',
+  'green_apple': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f34f.png?v7',
+  'green_book': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d7.png?v7',
+  'green_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f49a.png?v7',
+  'green_salad': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f957.png?v7',
+  'greenland': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1f1.png?v7',
+  'grenada': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1e9.png?v7',
+  'grey_exclamation': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2755.png?v7',
+  'grey_question': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2754.png?v7',
+  'grimacing': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f62c.png?v7',
+  'grin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f601.png?v7',
+  'grinning': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f600.png?v7',
+  'guadeloupe': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1f5.png?v7',
+  'guam': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1fa.png?v7',
+  'guardsman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f482.png?v7',
+  'guardswoman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f482-2640.png?v7',
+  'guatemala': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1f9.png?v7',
+  'guernsey': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1ec.png?v7',
+  'guinea': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1f3.png?v7',
+  'guinea_bissau': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1fc.png?v7',
+  'guitar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b8.png?v7',
+  'gun': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f52b.png?v7',
+  'guyana': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1fe.png?v7',
+  'haircut': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f487.png?v7',
+  'haircut_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f487-2642.png?v7',
+  'haircut_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f487.png?v7',
+  'haiti': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ed-1f1f9.png?v7',
+  'hamburger': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f354.png?v7',
+  'hammer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f528.png?v7',
+  'hammer_and_pick': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2692.png?v7',
+  'hammer_and_wrench': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6e0.png?v7',
+  'hamster': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f439.png?v7',
+  'hand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/270b.png?v7',
+  'handbag': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f45c.png?v7',
+  'handshake': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f91d.png?v7',
+  'hankey': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a9.png?v7',
+  'hash': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0023-20e3.png?v7',
+  'hatched_chick': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f425.png?v7',
+  'hatching_chick': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f423.png?v7',
+  'headphones': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a7.png?v7',
+  'hear_no_evil': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f649.png?v7',
+  'heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2764.png?v7',
+  'heart_decoration': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f49f.png?v7',
+  'heart_eyes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f60d.png?v7',
+  'heart_eyes_cat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f63b.png?v7',
+  'heartbeat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f493.png?v7',
+  'heartpulse': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f497.png?v7',
+  'hearts': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2665.png?v7',
+  'heavy_check_mark': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2714.png?v7',
+  'heavy_division_sign': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2797.png?v7',
+  'heavy_dollar_sign': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b2.png?v7',
+  'heavy_exclamation_mark': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2757.png?v7',
+  'heavy_heart_exclamation': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2763.png?v7',
+  'heavy_minus_sign': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2796.png?v7',
+  'heavy_multiplication_x': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2716.png?v7',
+  'heavy_plus_sign': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2795.png?v7',
+  'helicopter': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f681.png?v7',
+  'herb': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f33f.png?v7',
+  'hibiscus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f33a.png?v7',
+  'high_brightness': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f506.png?v7',
+  'high_heel': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f460.png?v7',
+  'hocho': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f52a.png?v7',
+  'hole': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f573.png?v7',
+  'honduras': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ed-1f1f3.png?v7',
+  'honey_pot': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f36f.png?v7',
+  'honeybee': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f41d.png?v7',
+  'hong_kong': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ed-1f1f0.png?v7',
+  'horse': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f434.png?v7',
+  'horse_racing': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c7.png?v7',
+  'hospital': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e5.png?v7',
+  'hot_pepper': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f336.png?v7',
+  'hotdog': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f32d.png?v7',
+  'hotel': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e8.png?v7',
+  'hotsprings': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2668.png?v7',
+  'hourglass': 'https://assets-cdn.github.com/images/icons/emoji/unicode/231b.png?v7',
+  'hourglass_flowing_sand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23f3.png?v7',
+  'house': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e0.png?v7',
+  'house_with_garden': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e1.png?v7',
+  'houses': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d8.png?v7',
+  'hugs': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f917.png?v7',
+  'hungary': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ed-1f1fa.png?v7',
+  'hurtrealbad': 'https://assets-cdn.github.com/images/icons/emoji/hurtrealbad.png?v7',
+  'hushed': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f62f.png?v7',
+  'ice_cream': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f368.png?v7',
+  'ice_hockey': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d2.png?v7',
+  'ice_skate': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f8.png?v7',
+  'icecream': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f366.png?v7',
+  'iceland': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1f8.png?v7',
+  'id': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f194.png?v7',
+  'ideograph_advantage': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f250.png?v7',
+  'imp': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f47f.png?v7',
+  'inbox_tray': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e5.png?v7',
+  'incoming_envelope': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e8.png?v7',
+  'india': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1f3.png?v7',
+  'indonesia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1e9.png?v7',
+  'information_desk_person': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f481.png?v7',
+  'information_source': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2139.png?v7',
+  'innocent': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f607.png?v7',
+  'interrobang': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2049.png?v7',
+  'iphone': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f1.png?v7',
+  'iran': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1f7.png?v7',
+  'iraq': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1f6.png?v7',
+  'ireland': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1ea.png?v7',
+  'isle_of_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1f2.png?v7',
+  'israel': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1f1.png?v7',
+  'it': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ee-1f1f9.png?v7',
+  'izakaya_lantern': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ee.png?v7',
+  'jack_o_lantern': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f383.png?v7',
+  'jamaica': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ef-1f1f2.png?v7',
+  'japan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5fe.png?v7',
+  'japanese_castle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ef.png?v7',
+  'japanese_goblin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f47a.png?v7',
+  'japanese_ogre': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f479.png?v7',
+  'jeans': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f456.png?v7',
+  'jersey': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ef-1f1ea.png?v7',
+  'jordan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ef-1f1f4.png?v7',
+  'joy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f602.png?v7',
+  'joy_cat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f639.png?v7',
+  'joystick': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f579.png?v7',
+  'jp': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ef-1f1f5.png?v7',
+  'kaaba': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f54b.png?v7',
+  'kazakhstan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1ff.png?v7',
+  'kenya': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1ea.png?v7',
+  'key': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f511.png?v7',
+  'keyboard': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2328.png?v7',
+  'keycap_ten': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f51f.png?v7',
+  'kick_scooter': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6f4.png?v7',
+  'kimono': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f458.png?v7',
+  'kiribati': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1ee.png?v7',
+  'kiss': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f48b.png?v7',
+  'kissing': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f617.png?v7',
+  'kissing_cat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f63d.png?v7',
+  'kissing_closed_eyes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f61a.png?v7',
+  'kissing_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f618.png?v7',
+  'kissing_smiling_eyes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f619.png?v7',
+  'kiwi_fruit': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f95d.png?v7',
+  'knife': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f52a.png?v7',
+  'koala': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f428.png?v7',
+  'koko': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f201.png?v7',
+  'kosovo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fd-1f1f0.png?v7',
+  'kr': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1f7.png?v7',
+  'kuwait': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1fc.png?v7',
+  'kyrgyzstan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1ec.png?v7',
+  'label': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3f7.png?v7',
+  'lantern': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ee.png?v7',
+  'laos': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1e6.png?v7',
+  'large_blue_circle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f535.png?v7',
+  'large_blue_diamond': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f537.png?v7',
+  'large_orange_diamond': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f536.png?v7',
+  'last_quarter_moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f317.png?v7',
+  'last_quarter_moon_with_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f31c.png?v7',
+  'latin_cross': 'https://assets-cdn.github.com/images/icons/emoji/unicode/271d.png?v7',
+  'latvia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1fb.png?v7',
+  'laughing': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f606.png?v7',
+  'leaves': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f343.png?v7',
+  'lebanon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1e7.png?v7',
+  'ledger': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d2.png?v7',
+  'left_luggage': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6c5.png?v7',
+  'left_right_arrow': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2194.png?v7',
+  'leftwards_arrow_with_hook': 'https://assets-cdn.github.com/images/icons/emoji/unicode/21a9.png?v7',
+  'lemon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f34b.png?v7',
+  'leo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/264c.png?v7',
+  'leopard': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f406.png?v7',
+  'lesotho': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1f8.png?v7',
+  'level_slider': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f39a.png?v7',
+  'liberia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1f7.png?v7',
+  'libra': 'https://assets-cdn.github.com/images/icons/emoji/unicode/264e.png?v7',
+  'libya': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1fe.png?v7',
+  'liechtenstein': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1ee.png?v7',
+  'light_rail': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f688.png?v7',
+  'link': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f517.png?v7',
+  'lion': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f981.png?v7',
+  'lips': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f444.png?v7',
+  'lipstick': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f484.png?v7',
+  'lithuania': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1f9.png?v7',
+  'lizard': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f98e.png?v7',
+  'lock': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f512.png?v7',
+  'lock_with_ink_pen': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f50f.png?v7',
+  'lollipop': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f36d.png?v7',
+  'loop': 'https://assets-cdn.github.com/images/icons/emoji/unicode/27bf.png?v7',
+  'loud_sound': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f50a.png?v7',
+  'loudspeaker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e2.png?v7',
+  'love_hotel': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e9.png?v7',
+  'love_letter': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f48c.png?v7',
+  'low_brightness': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f505.png?v7',
+  'luxembourg': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1fa.png?v7',
+  'lying_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f925.png?v7',
+  'm': 'https://assets-cdn.github.com/images/icons/emoji/unicode/24c2.png?v7',
+  'macau': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f4.png?v7',
+  'macedonia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f0.png?v7',
+  'madagascar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1ec.png?v7',
+  'mag': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f50d.png?v7',
+  'mag_right': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f50e.png?v7',
+  'mahjong': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f004.png?v7',
+  'mailbox': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4eb.png?v7',
+  'mailbox_closed': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ea.png?v7',
+  'mailbox_with_mail': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ec.png?v7',
+  'mailbox_with_no_mail': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ed.png?v7',
+  'malawi': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1fc.png?v7',
+  'malaysia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1fe.png?v7',
+  'maldives': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1fb.png?v7',
+  'male_detective': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f575.png?v7',
+  'mali': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f1.png?v7',
+  'malta': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f9.png?v7',
+  'man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468.png?v7',
+  'man_artist': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f3a8.png?v7',
+  'man_astronaut': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f680.png?v7',
+  'man_cartwheeling': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f938-2642.png?v7',
+  'man_cook': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f373.png?v7',
+  'man_dancing': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f57a.png?v7',
+  'man_facepalming': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f926-2642.png?v7',
+  'man_factory_worker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f3ed.png?v7',
+  'man_farmer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f33e.png?v7',
+  'man_firefighter': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f692.png?v7',
+  'man_health_worker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-2695.png?v7',
+  'man_in_tuxedo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f935.png?v7',
+  'man_judge': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-2696.png?v7',
+  'man_juggling': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f939-2642.png?v7',
+  'man_mechanic': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f527.png?v7',
+  'man_office_worker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f4bc.png?v7',
+  'man_pilot': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-2708.png?v7',
+  'man_playing_handball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f93e-2642.png?v7',
+  'man_playing_water_polo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f93d-2642.png?v7',
+  'man_scientist': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f52c.png?v7',
+  'man_shrugging': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f937-2642.png?v7',
+  'man_singer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f3a4.png?v7',
+  'man_student': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f393.png?v7',
+  'man_teacher': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f3eb.png?v7',
+  'man_technologist': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f468-1f4bb.png?v7',
+  'man_with_gua_pi_mao': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f472.png?v7',
+  'man_with_turban': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f473.png?v7',
+  'mandarin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f34a.png?v7',
+  'mans_shoe': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f45e.png?v7',
+  'mantelpiece_clock': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f570.png?v7',
+  'maple_leaf': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f341.png?v7',
+  'marshall_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1ed.png?v7',
+  'martial_arts_uniform': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f94b.png?v7',
+  'martinique': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f6.png?v7',
+  'mask': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f637.png?v7',
+  'massage': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f486.png?v7',
+  'massage_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f486-2642.png?v7',
+  'massage_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f486.png?v7',
+  'mauritania': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f7.png?v7',
+  'mauritius': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1fa.png?v7',
+  'mayotte': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fe-1f1f9.png?v7',
+  'meat_on_bone': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f356.png?v7',
+  'medal_military': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f396.png?v7',
+  'medal_sports': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c5.png?v7',
+  'mega': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e3.png?v7',
+  'melon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f348.png?v7',
+  'memo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4dd.png?v7',
+  'men_wrestling': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f93c-2642.png?v7',
+  'menorah': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f54e.png?v7',
+  'mens': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b9.png?v7',
+  'metal': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f918.png?v7',
+  'metro': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f687.png?v7',
+  'mexico': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1fd.png?v7',
+  'micronesia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1eb-1f1f2.png?v7',
+  'microphone': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a4.png?v7',
+  'microscope': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f52c.png?v7',
+  'middle_finger': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f595.png?v7',
+  'milk_glass': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f95b.png?v7',
+  'milky_way': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f30c.png?v7',
+  'minibus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f690.png?v7',
+  'minidisc': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4bd.png?v7',
+  'mobile_phone_off': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f4.png?v7',
+  'moldova': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1e9.png?v7',
+  'monaco': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1e8.png?v7',
+  'money_mouth_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f911.png?v7',
+  'money_with_wings': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b8.png?v7',
+  'moneybag': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b0.png?v7',
+  'mongolia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f3.png?v7',
+  'monkey': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f412.png?v7',
+  'monkey_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f435.png?v7',
+  'monorail': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f69d.png?v7',
+  'montenegro': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1ea.png?v7',
+  'montserrat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f8.png?v7',
+  'moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f314.png?v7',
+  'morocco': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1e6.png?v7',
+  'mortar_board': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f393.png?v7',
+  'mosque': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f54c.png?v7',
+  'motor_boat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6e5.png?v7',
+  'motor_scooter': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6f5.png?v7',
+  'motorcycle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3cd.png?v7',
+  'motorway': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6e3.png?v7',
+  'mount_fuji': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5fb.png?v7',
+  'mountain': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f0.png?v7',
+  'mountain_bicyclist': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b5.png?v7',
+  'mountain_biking_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b5.png?v7',
+  'mountain_biking_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b5-2640.png?v7',
+  'mountain_cableway': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a0.png?v7',
+  'mountain_railway': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f69e.png?v7',
+  'mountain_snow': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d4.png?v7',
+  'mouse': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f42d.png?v7',
+  'mouse2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f401.png?v7',
+  'movie_camera': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a5.png?v7',
+  'moyai': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5ff.png?v7',
+  'mozambique': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1ff.png?v7',
+  'mrs_claus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f936.png?v7',
+  'muscle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4aa.png?v7',
+  'mushroom': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f344.png?v7',
+  'musical_keyboard': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b9.png?v7',
+  'musical_note': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b5.png?v7',
+  'musical_score': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3bc.png?v7',
+  'mute': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f507.png?v7',
+  'myanmar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f2.png?v7',
+  'nail_care': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f485.png?v7',
+  'name_badge': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4db.png?v7',
+  'namibia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1e6.png?v7',
+  'national_park': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3de.png?v7',
+  'nauru': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1f7.png?v7',
+  'nauseated_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f922.png?v7',
+  'neckbeard': 'https://assets-cdn.github.com/images/icons/emoji/neckbeard.png?v7',
+  'necktie': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f454.png?v7',
+  'negative_squared_cross_mark': 'https://assets-cdn.github.com/images/icons/emoji/unicode/274e.png?v7',
+  'nepal': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1f5.png?v7',
+  'nerd_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f913.png?v7',
+  'netherlands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1f1.png?v7',
+  'neutral_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f610.png?v7',
+  'new': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f195.png?v7',
+  'new_caledonia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1e8.png?v7',
+  'new_moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f311.png?v7',
+  'new_moon_with_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f31a.png?v7',
+  'new_zealand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1ff.png?v7',
+  'newspaper': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f0.png?v7',
+  'newspaper_roll': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5de.png?v7',
+  'next_track_button': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23ed.png?v7',
+  'ng': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f196.png?v7',
+  'ng_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f645-2642.png?v7',
+  'ng_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f645.png?v7',
+  'nicaragua': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1ee.png?v7',
+  'niger': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1ea.png?v7',
+  'nigeria': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1ec.png?v7',
+  'night_with_stars': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f303.png?v7',
+  'nine': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0039-20e3.png?v7',
+  'niue': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1fa.png?v7',
+  'no_bell': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f515.png?v7',
+  'no_bicycles': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b3.png?v7',
+  'no_entry': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26d4.png?v7',
+  'no_entry_sign': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6ab.png?v7',
+  'no_good': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f645.png?v7',
+  'no_good_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f645-2642.png?v7',
+  'no_good_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f645.png?v7',
+  'no_mobile_phones': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f5.png?v7',
+  'no_mouth': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f636.png?v7',
+  'no_pedestrians': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b7.png?v7',
+  'no_smoking': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6ad.png?v7',
+  'non-potable_water': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b1.png?v7',
+  'norfolk_island': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1eb.png?v7',
+  'north_korea': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1f5.png?v7',
+  'northern_mariana_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f2-1f1f5.png?v7',
+  'norway': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f3-1f1f4.png?v7',
+  'nose': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f443.png?v7',
+  'notebook': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d3.png?v7',
+  'notebook_with_decorative_cover': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d4.png?v7',
+  'notes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b6.png?v7',
+  'nut_and_bolt': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f529.png?v7',
+  'o': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2b55.png?v7',
+  'o2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f17e.png?v7',
+  'ocean': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f30a.png?v7',
+  'octocat': 'https://assets-cdn.github.com/images/icons/emoji/octocat.png?v7',
+  'octopus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f419.png?v7',
+  'oden': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f362.png?v7',
+  'office': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e2.png?v7',
+  'oil_drum': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6e2.png?v7',
+  'ok': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f197.png?v7',
+  'ok_hand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44c.png?v7',
+  'ok_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f646-2642.png?v7',
+  'ok_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f646.png?v7',
+  'old_key': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5dd.png?v7',
+  'older_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f474.png?v7',
+  'older_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f475.png?v7',
+  'om': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f549.png?v7',
+  'oman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f4-1f1f2.png?v7',
+  'on': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f51b.png?v7',
+  'oncoming_automobile': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f698.png?v7',
+  'oncoming_bus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f68d.png?v7',
+  'oncoming_police_car': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f694.png?v7',
+  'oncoming_taxi': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f696.png?v7',
+  'one': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0031-20e3.png?v7',
+  'open_book': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d6.png?v7',
+  'open_file_folder': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c2.png?v7',
+  'open_hands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f450.png?v7',
+  'open_mouth': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f62e.png?v7',
+  'open_umbrella': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2602.png?v7',
+  'ophiuchus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26ce.png?v7',
+  'orange': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f34a.png?v7',
+  'orange_book': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d9.png?v7',
+  'orthodox_cross': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2626.png?v7',
+  'outbox_tray': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e4.png?v7',
+  'owl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f989.png?v7',
+  'ox': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f402.png?v7',
+  'package': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e6.png?v7',
+  'page_facing_up': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c4.png?v7',
+  'page_with_curl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4c3.png?v7',
+  'pager': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4df.png?v7',
+  'paintbrush': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f58c.png?v7',
+  'pakistan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1f0.png?v7',
+  'palau': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1fc.png?v7',
+  'palestinian_territories': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1f8.png?v7',
+  'palm_tree': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f334.png?v7',
+  'panama': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1e6.png?v7',
+  'pancakes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f95e.png?v7',
+  'panda_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f43c.png?v7',
+  'paperclip': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ce.png?v7',
+  'paperclips': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f587.png?v7',
+  'papua_new_guinea': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1ec.png?v7',
+  'paraguay': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1fe.png?v7',
+  'parasol_on_ground': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f1.png?v7',
+  'parking': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f17f.png?v7',
+  'part_alternation_mark': 'https://assets-cdn.github.com/images/icons/emoji/unicode/303d.png?v7',
+  'partly_sunny': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26c5.png?v7',
+  'passenger_ship': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6f3.png?v7',
+  'passport_control': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6c2.png?v7',
+  'pause_button': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23f8.png?v7',
+  'paw_prints': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f43e.png?v7',
+  'peace_symbol': 'https://assets-cdn.github.com/images/icons/emoji/unicode/262e.png?v7',
+  'peach': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f351.png?v7',
+  'peanuts': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f95c.png?v7',
+  'pear': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f350.png?v7',
+  'pen': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f58a.png?v7',
+  'pencil': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4dd.png?v7',
+  'pencil2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/270f.png?v7',
+  'penguin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f427.png?v7',
+  'pensive': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f614.png?v7',
+  'performing_arts': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ad.png?v7',
+  'persevere': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f623.png?v7',
+  'person_fencing': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f93a.png?v7',
+  'person_frowning': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64d.png?v7',
+  'person_with_blond_hair': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f471.png?v7',
+  'person_with_pouting_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64e.png?v7',
+  'peru': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1ea.png?v7',
+  'philippines': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1ed.png?v7',
+  'phone': 'https://assets-cdn.github.com/images/icons/emoji/unicode/260e.png?v7',
+  'pick': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26cf.png?v7',
+  'pig': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f437.png?v7',
+  'pig2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f416.png?v7',
+  'pig_nose': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f43d.png?v7',
+  'pill': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f48a.png?v7',
+  'pineapple': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f34d.png?v7',
+  'ping_pong': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d3.png?v7',
+  'pisces': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2653.png?v7',
+  'pitcairn_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1f3.png?v7',
+  'pizza': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f355.png?v7',
+  'place_of_worship': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6d0.png?v7',
+  'plate_with_cutlery': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f37d.png?v7',
+  'play_or_pause_button': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23ef.png?v7',
+  'point_down': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f447.png?v7',
+  'point_left': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f448.png?v7',
+  'point_right': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f449.png?v7',
+  'point_up': 'https://assets-cdn.github.com/images/icons/emoji/unicode/261d.png?v7',
+  'point_up_2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f446.png?v7',
+  'poland': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1f1.png?v7',
+  'police_car': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f693.png?v7',
+  'policeman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46e.png?v7',
+  'policewoman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46e-2640.png?v7',
+  'poodle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f429.png?v7',
+  'poop': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a9.png?v7',
+  'popcorn': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f37f.png?v7',
+  'portugal': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1f9.png?v7',
+  'post_office': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3e3.png?v7',
+  'postal_horn': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ef.png?v7',
+  'postbox': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ee.png?v7',
+  'potable_water': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b0.png?v7',
+  'potato': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f954.png?v7',
+  'pouch': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f45d.png?v7',
+  'poultry_leg': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f357.png?v7',
+  'pound': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b7.png?v7',
+  'pout': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f621.png?v7',
+  'pouting_cat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f63e.png?v7',
+  'pouting_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64e-2642.png?v7',
+  'pouting_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64e.png?v7',
+  'pray': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64f.png?v7',
+  'prayer_beads': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ff.png?v7',
+  'pregnant_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f930.png?v7',
+  'previous_track_button': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23ee.png?v7',
+  'prince': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f934.png?v7',
+  'princess': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f478.png?v7',
+  'printer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5a8.png?v7',
+  'puerto_rico': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1f7.png?v7',
+  'punch': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44a.png?v7',
+  'purple_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f49c.png?v7',
+  'purse': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f45b.png?v7',
+  'pushpin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4cc.png?v7',
+  'put_litter_in_its_place': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6ae.png?v7',
+  'qatar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f6-1f1e6.png?v7',
+  'question': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2753.png?v7',
+  'rabbit': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f430.png?v7',
+  'rabbit2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f407.png?v7',
+  'racehorse': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f40e.png?v7',
+  'racing_car': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ce.png?v7',
+  'radio': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4fb.png?v7',
+  'radio_button': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f518.png?v7',
+  'radioactive': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2622.png?v7',
+  'rage': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f621.png?v7',
+  'rage1': 'https://assets-cdn.github.com/images/icons/emoji/rage1.png?v7',
+  'rage2': 'https://assets-cdn.github.com/images/icons/emoji/rage2.png?v7',
+  'rage3': 'https://assets-cdn.github.com/images/icons/emoji/rage3.png?v7',
+  'rage4': 'https://assets-cdn.github.com/images/icons/emoji/rage4.png?v7',
+  'railway_car': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f683.png?v7',
+  'railway_track': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6e4.png?v7',
+  'rainbow': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f308.png?v7',
+  'rainbow_flag': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3f3-1f308.png?v7',
+  'raised_back_of_hand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f91a.png?v7',
+  'raised_hand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/270b.png?v7',
+  'raised_hand_with_fingers_splayed': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f590.png?v7',
+  'raised_hands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64c.png?v7',
+  'raising_hand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64b.png?v7',
+  'raising_hand_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64b-2642.png?v7',
+  'raising_hand_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64b.png?v7',
+  'ram': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f40f.png?v7',
+  'ramen': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f35c.png?v7',
+  'rat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f400.png?v7',
+  'record_button': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23fa.png?v7',
+  'recycle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/267b.png?v7',
+  'red_car': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f697.png?v7',
+  'red_circle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f534.png?v7',
+  'registered': 'https://assets-cdn.github.com/images/icons/emoji/unicode/00ae.png?v7',
+  'relaxed': 'https://assets-cdn.github.com/images/icons/emoji/unicode/263a.png?v7',
+  'relieved': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f60c.png?v7',
+  'reminder_ribbon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f397.png?v7',
+  'repeat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f501.png?v7',
+  'repeat_one': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f502.png?v7',
+  'rescue_worker_helmet': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26d1.png?v7',
+  'restroom': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6bb.png?v7',
+  'reunion': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f7-1f1ea.png?v7',
+  'revolving_hearts': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f49e.png?v7',
+  'rewind': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23ea.png?v7',
+  'rhinoceros': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f98f.png?v7',
+  'ribbon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f380.png?v7',
+  'rice': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f35a.png?v7',
+  'rice_ball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f359.png?v7',
+  'rice_cracker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f358.png?v7',
+  'rice_scene': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f391.png?v7',
+  'right_anger_bubble': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5ef.png?v7',
+  'ring': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f48d.png?v7',
+  'robot': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f916.png?v7',
+  'rocket': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f680.png?v7',
+  'rofl': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f923.png?v7',
+  'roll_eyes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f644.png?v7',
+  'roller_coaster': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a2.png?v7',
+  'romania': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f7-1f1f4.png?v7',
+  'rooster': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f413.png?v7',
+  'rose': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f339.png?v7',
+  'rosette': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3f5.png?v7',
+  'rotating_light': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a8.png?v7',
+  'round_pushpin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4cd.png?v7',
+  'rowboat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a3.png?v7',
+  'rowing_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a3.png?v7',
+  'rowing_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a3-2640.png?v7',
+  'ru': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f7-1f1fa.png?v7',
+  'rugby_football': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c9.png?v7',
+  'runner': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c3.png?v7',
+  'running': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c3.png?v7',
+  'running_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c3.png?v7',
+  'running_shirt_with_sash': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3bd.png?v7',
+  'running_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c3-2640.png?v7',
+  'rwanda': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f7-1f1fc.png?v7',
+  'sa': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f202.png?v7',
+  'sagittarius': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2650.png?v7',
+  'sailboat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f5.png?v7',
+  'sake': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f376.png?v7',
+  'samoa': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fc-1f1f8.png?v7',
+  'san_marino': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1f2.png?v7',
+  'sandal': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f461.png?v7',
+  'santa': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f385.png?v7',
+  'sao_tome_principe': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1f9.png?v7',
+  'satellite': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4e1.png?v7',
+  'satisfied': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f606.png?v7',
+  'saudi_arabia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1e6.png?v7',
+  'saxophone': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b7.png?v7',
+  'school': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3eb.png?v7',
+  'school_satchel': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f392.png?v7',
+  'scissors': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2702.png?v7',
+  'scorpion': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f982.png?v7',
+  'scorpius': 'https://assets-cdn.github.com/images/icons/emoji/unicode/264f.png?v7',
+  'scream': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f631.png?v7',
+  'scream_cat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f640.png?v7',
+  'scroll': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4dc.png?v7',
+  'seat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ba.png?v7',
+  'secret': 'https://assets-cdn.github.com/images/icons/emoji/unicode/3299.png?v7',
+  'see_no_evil': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f648.png?v7',
+  'seedling': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f331.png?v7',
+  'selfie': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f933.png?v7',
+  'senegal': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1f3.png?v7',
+  'serbia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f7-1f1f8.png?v7',
+  'seven': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0037-20e3.png?v7',
+  'seychelles': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1e8.png?v7',
+  'shallow_pan_of_food': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f958.png?v7',
+  'shamrock': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2618.png?v7',
+  'shark': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f988.png?v7',
+  'shaved_ice': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f367.png?v7',
+  'sheep': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f411.png?v7',
+  'shell': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f41a.png?v7',
+  'shield': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6e1.png?v7',
+  'shinto_shrine': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26e9.png?v7',
+  'ship': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a2.png?v7',
+  'shipit': 'https://assets-cdn.github.com/images/icons/emoji/shipit.png?v7',
+  'shirt': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f455.png?v7',
+  'shit': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a9.png?v7',
+  'shoe': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f45e.png?v7',
+  'shopping': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6cd.png?v7',
+  'shopping_cart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6d2.png?v7',
+  'shower': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6bf.png?v7',
+  'shrimp': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f990.png?v7',
+  'sierra_leone': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1f1.png?v7',
+  'signal_strength': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f6.png?v7',
+  'singapore': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1ec.png?v7',
+  'sint_maarten': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1fd.png?v7',
+  'six': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0036-20e3.png?v7',
+  'six_pointed_star': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f52f.png?v7',
+  'ski': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3bf.png?v7',
+  'skier': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26f7.png?v7',
+  'skull': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f480.png?v7',
+  'skull_and_crossbones': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2620.png?v7',
+  'sleeping': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f634.png?v7',
+  'sleeping_bed': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6cc.png?v7',
+  'sleepy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f62a.png?v7',
+  'slightly_frowning_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f641.png?v7',
+  'slightly_smiling_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f642.png?v7',
+  'slot_machine': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3b0.png?v7',
+  'slovakia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1f0.png?v7',
+  'slovenia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1ee.png?v7',
+  'small_airplane': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6e9.png?v7',
+  'small_blue_diamond': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f539.png?v7',
+  'small_orange_diamond': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f538.png?v7',
+  'small_red_triangle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f53a.png?v7',
+  'small_red_triangle_down': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f53b.png?v7',
+  'smile': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f604.png?v7',
+  'smile_cat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f638.png?v7',
+  'smiley': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f603.png?v7',
+  'smiley_cat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f63a.png?v7',
+  'smiling_imp': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f608.png?v7',
+  'smirk': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f60f.png?v7',
+  'smirk_cat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f63c.png?v7',
+  'smoking': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6ac.png?v7',
+  'snail': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f40c.png?v7',
+  'snake': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f40d.png?v7',
+  'sneezing_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f927.png?v7',
+  'snowboarder': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c2.png?v7',
+  'snowflake': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2744.png?v7',
+  'snowman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26c4.png?v7',
+  'snowman_with_snow': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2603.png?v7',
+  'sob': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f62d.png?v7',
+  'soccer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26bd.png?v7',
+  'solomon_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1e7.png?v7',
+  'somalia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1f4.png?v7',
+  'soon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f51c.png?v7',
+  'sos': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f198.png?v7',
+  'sound': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f509.png?v7',
+  'south_africa': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ff-1f1e6.png?v7',
+  'south_georgia_south_sandwich_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1f8.png?v7',
+  'south_sudan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1f8.png?v7',
+  'space_invader': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f47e.png?v7',
+  'spades': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2660.png?v7',
+  'spaghetti': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f35d.png?v7',
+  'sparkle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2747.png?v7',
+  'sparkler': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f387.png?v7',
+  'sparkles': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2728.png?v7',
+  'sparkling_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f496.png?v7',
+  'speak_no_evil': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f64a.png?v7',
+  'speaker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f508.png?v7',
+  'speaking_head': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5e3.png?v7',
+  'speech_balloon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ac.png?v7',
+  'speedboat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a4.png?v7',
+  'spider': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f577.png?v7',
+  'spider_web': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f578.png?v7',
+  'spiral_calendar': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5d3.png?v7',
+  'spiral_notepad': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5d2.png?v7',
+  'spoon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f944.png?v7',
+  'squid': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f991.png?v7',
+  'squirrel': 'https://assets-cdn.github.com/images/icons/emoji/shipit.png?v7',
+  'sri_lanka': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1f0.png?v7',
+  'st_barthelemy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e7-1f1f1.png?v7',
+  'st_helena': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1ed.png?v7',
+  'st_kitts_nevis': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f0-1f1f3.png?v7',
+  'st_lucia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f1-1f1e8.png?v7',
+  'st_pierre_miquelon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f5-1f1f2.png?v7',
+  'st_vincent_grenadines': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fb-1f1e8.png?v7',
+  'stadium': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3df.png?v7',
+  'star': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2b50.png?v7',
+  'star2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f31f.png?v7',
+  'star_and_crescent': 'https://assets-cdn.github.com/images/icons/emoji/unicode/262a.png?v7',
+  'star_of_david': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2721.png?v7',
+  'stars': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f320.png?v7',
+  'station': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f689.png?v7',
+  'statue_of_liberty': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5fd.png?v7',
+  'steam_locomotive': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f682.png?v7',
+  'stew': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f372.png?v7',
+  'stop_button': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23f9.png?v7',
+  'stop_sign': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6d1.png?v7',
+  'stopwatch': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23f1.png?v7',
+  'straight_ruler': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4cf.png?v7',
+  'strawberry': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f353.png?v7',
+  'stuck_out_tongue': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f61b.png?v7',
+  'stuck_out_tongue_closed_eyes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f61d.png?v7',
+  'stuck_out_tongue_winking_eye': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f61c.png?v7',
+  'studio_microphone': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f399.png?v7',
+  'stuffed_flatbread': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f959.png?v7',
+  'sudan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1e9.png?v7',
+  'sun_behind_large_cloud': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f325.png?v7',
+  'sun_behind_rain_cloud': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f326.png?v7',
+  'sun_behind_small_cloud': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f324.png?v7',
+  'sun_with_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f31e.png?v7',
+  'sunflower': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f33b.png?v7',
+  'sunglasses': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f60e.png?v7',
+  'sunny': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2600.png?v7',
+  'sunrise': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f305.png?v7',
+  'sunrise_over_mountains': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f304.png?v7',
+  'surfer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c4.png?v7',
+  'surfing_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c4.png?v7',
+  'surfing_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c4-2640.png?v7',
+  'suriname': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1f7.png?v7',
+  'sushi': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f363.png?v7',
+  'suspect': 'https://assets-cdn.github.com/images/icons/emoji/suspect.png?v7',
+  'suspension_railway': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f69f.png?v7',
+  'swaziland': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1ff.png?v7',
+  'sweat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f613.png?v7',
+  'sweat_drops': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a6.png?v7',
+  'sweat_smile': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f605.png?v7',
+  'sweden': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1ea.png?v7',
+  'sweet_potato': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f360.png?v7',
+  'swimmer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ca.png?v7',
+  'swimming_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ca.png?v7',
+  'swimming_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ca-2640.png?v7',
+  'switzerland': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e8-1f1ed.png?v7',
+  'symbols': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f523.png?v7',
+  'synagogue': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f54d.png?v7',
+  'syria': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f8-1f1fe.png?v7',
+  'syringe': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f489.png?v7',
+  'taco': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f32e.png?v7',
+  'tada': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f389.png?v7',
+  'taiwan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1fc.png?v7',
+  'tajikistan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1ef.png?v7',
+  'tanabata_tree': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f38b.png?v7',
+  'tangerine': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f34a.png?v7',
+  'tanzania': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1ff.png?v7',
+  'taurus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2649.png?v7',
+  'taxi': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f695.png?v7',
+  'tea': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f375.png?v7',
+  'telephone': 'https://assets-cdn.github.com/images/icons/emoji/unicode/260e.png?v7',
+  'telephone_receiver': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4de.png?v7',
+  'telescope': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f52d.png?v7',
+  'tennis': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3be.png?v7',
+  'tent': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26fa.png?v7',
+  'thailand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1ed.png?v7',
+  'thermometer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f321.png?v7',
+  'thinking': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f914.png?v7',
+  'thought_balloon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ad.png?v7',
+  'three': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0033-20e3.png?v7',
+  'thumbsdown': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44e.png?v7',
+  'thumbsup': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44d.png?v7',
+  'ticket': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ab.png?v7',
+  'tickets': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f39f.png?v7',
+  'tiger': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f42f.png?v7',
+  'tiger2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f405.png?v7',
+  'timer_clock': 'https://assets-cdn.github.com/images/icons/emoji/unicode/23f2.png?v7',
+  'timor_leste': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1f1.png?v7',
+  'tipping_hand_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f481-2642.png?v7',
+  'tipping_hand_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f481.png?v7',
+  'tired_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f62b.png?v7',
+  'tm': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2122.png?v7',
+  'togo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1ec.png?v7',
+  'toilet': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6bd.png?v7',
+  'tokelau': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1f0.png?v7',
+  'tokyo_tower': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5fc.png?v7',
+  'tomato': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f345.png?v7',
+  'tonga': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1f4.png?v7',
+  'tongue': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f445.png?v7',
+  'top': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f51d.png?v7',
+  'tophat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3a9.png?v7',
+  'tornado': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f32a.png?v7',
+  'tr': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1f7.png?v7',
+  'trackball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5b2.png?v7',
+  'tractor': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f69c.png?v7',
+  'traffic_light': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a5.png?v7',
+  'train': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f68b.png?v7',
+  'train2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f686.png?v7',
+  'tram': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f68a.png?v7',
+  'triangular_flag_on_post': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a9.png?v7',
+  'triangular_ruler': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4d0.png?v7',
+  'trident': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f531.png?v7',
+  'trinidad_tobago': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1f9.png?v7',
+  'triumph': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f624.png?v7',
+  'trolleybus': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f68e.png?v7',
+  'trollface': 'https://assets-cdn.github.com/images/icons/emoji/trollface.png?v7',
+  'trophy': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3c6.png?v7',
+  'tropical_drink': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f379.png?v7',
+  'tropical_fish': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f420.png?v7',
+  'truck': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f69a.png?v7',
+  'trumpet': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ba.png?v7',
+  'tshirt': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f455.png?v7',
+  'tulip': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f337.png?v7',
+  'tumbler_glass': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f943.png?v7',
+  'tunisia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1f3.png?v7',
+  'turkey': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f983.png?v7',
+  'turkmenistan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1f2.png?v7',
+  'turks_caicos_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1e8.png?v7',
+  'turtle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f422.png?v7',
+  'tuvalu': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1f9-1f1fb.png?v7',
+  'tv': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4fa.png?v7',
+  'twisted_rightwards_arrows': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f500.png?v7',
+  'two': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0032-20e3.png?v7',
+  'two_hearts': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f495.png?v7',
+  'two_men_holding_hands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46c.png?v7',
+  'two_women_holding_hands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f46d.png?v7',
+  'u5272': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f239.png?v7',
+  'u5408': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f234.png?v7',
+  'u55b6': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f23a.png?v7',
+  'u6307': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f22f.png?v7',
+  'u6708': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f237.png?v7',
+  'u6709': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f236.png?v7',
+  'u6e80': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f235.png?v7',
+  'u7121': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f21a.png?v7',
+  'u7533': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f238.png?v7',
+  'u7981': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f232.png?v7',
+  'u7a7a': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f233.png?v7',
+  'uganda': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fa-1f1ec.png?v7',
+  'uk': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ec-1f1e7.png?v7',
+  'ukraine': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fa-1f1e6.png?v7',
+  'umbrella': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2614.png?v7',
+  'unamused': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f612.png?v7',
+  'underage': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f51e.png?v7',
+  'unicorn': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f984.png?v7',
+  'united_arab_emirates': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1e6-1f1ea.png?v7',
+  'unlock': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f513.png?v7',
+  'up': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f199.png?v7',
+  'upside_down_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f643.png?v7',
+  'uruguay': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fa-1f1fe.png?v7',
+  'us': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fa-1f1f8.png?v7',
+  'us_virgin_islands': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fb-1f1ee.png?v7',
+  'uzbekistan': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fa-1f1ff.png?v7',
+  'v': 'https://assets-cdn.github.com/images/icons/emoji/unicode/270c.png?v7',
+  'vanuatu': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fb-1f1fa.png?v7',
+  'vatican_city': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fb-1f1e6.png?v7',
+  'venezuela': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fb-1f1ea.png?v7',
+  'vertical_traffic_light': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6a6.png?v7',
+  'vhs': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4fc.png?v7',
+  'vibration_mode': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f3.png?v7',
+  'video_camera': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4f9.png?v7',
+  'video_game': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3ae.png?v7',
+  'vietnam': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fb-1f1f3.png?v7',
+  'violin': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3bb.png?v7',
+  'virgo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/264d.png?v7',
+  'volcano': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f30b.png?v7',
+  'volleyball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3d0.png?v7',
+  'vs': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f19a.png?v7',
+  'vulcan_salute': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f596.png?v7',
+  'walking': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b6.png?v7',
+  'walking_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b6.png?v7',
+  'walking_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6b6-2640.png?v7',
+  'wallis_futuna': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fc-1f1eb.png?v7',
+  'waning_crescent_moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f318.png?v7',
+  'waning_gibbous_moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f316.png?v7',
+  'warning': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26a0.png?v7',
+  'wastebasket': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5d1.png?v7',
+  'watch': 'https://assets-cdn.github.com/images/icons/emoji/unicode/231a.png?v7',
+  'water_buffalo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f403.png?v7',
+  'watermelon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f349.png?v7',
+  'wave': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f44b.png?v7',
+  'wavy_dash': 'https://assets-cdn.github.com/images/icons/emoji/unicode/3030.png?v7',
+  'waxing_crescent_moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f312.png?v7',
+  'waxing_gibbous_moon': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f314.png?v7',
+  'wc': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6be.png?v7',
+  'weary': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f629.png?v7',
+  'wedding': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f492.png?v7',
+  'weight_lifting_man': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3cb.png?v7',
+  'weight_lifting_woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3cb-2640.png?v7',
+  'western_sahara': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ea-1f1ed.png?v7',
+  'whale': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f433.png?v7',
+  'whale2': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f40b.png?v7',
+  'wheel_of_dharma': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2638.png?v7',
+  'wheelchair': 'https://assets-cdn.github.com/images/icons/emoji/unicode/267f.png?v7',
+  'white_check_mark': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2705.png?v7',
+  'white_circle': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26aa.png?v7',
+  'white_flag': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f3f3.png?v7',
+  'white_flower': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4ae.png?v7',
+  'white_large_square': 'https://assets-cdn.github.com/images/icons/emoji/unicode/2b1c.png?v7',
+  'white_medium_small_square': 'https://assets-cdn.github.com/images/icons/emoji/unicode/25fd.png?v7',
+  'white_medium_square': 'https://assets-cdn.github.com/images/icons/emoji/unicode/25fb.png?v7',
+  'white_small_square': 'https://assets-cdn.github.com/images/icons/emoji/unicode/25ab.png?v7',
+  'white_square_button': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f533.png?v7',
+  'wilted_flower': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f940.png?v7',
+  'wind_chime': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f390.png?v7',
+  'wind_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f32c.png?v7',
+  'wine_glass': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f377.png?v7',
+  'wink': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f609.png?v7',
+  'wolf': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f43a.png?v7',
+  'woman': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469.png?v7',
+  'woman_artist': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f3a8.png?v7',
+  'woman_astronaut': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f680.png?v7',
+  'woman_cartwheeling': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f938-2640.png?v7',
+  'woman_cook': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f373.png?v7',
+  'woman_facepalming': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f926-2640.png?v7',
+  'woman_factory_worker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f3ed.png?v7',
+  'woman_farmer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f33e.png?v7',
+  'woman_firefighter': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f692.png?v7',
+  'woman_health_worker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-2695.png?v7',
+  'woman_judge': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-2696.png?v7',
+  'woman_juggling': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f939-2640.png?v7',
+  'woman_mechanic': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f527.png?v7',
+  'woman_office_worker': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f4bc.png?v7',
+  'woman_pilot': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-2708.png?v7',
+  'woman_playing_handball': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f93e-2640.png?v7',
+  'woman_playing_water_polo': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f93d-2640.png?v7',
+  'woman_scientist': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f52c.png?v7',
+  'woman_shrugging': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f937-2640.png?v7',
+  'woman_singer': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f3a4.png?v7',
+  'woman_student': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f393.png?v7',
+  'woman_teacher': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f3eb.png?v7',
+  'woman_technologist': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f469-1f4bb.png?v7',
+  'woman_with_turban': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f473-2640.png?v7',
+  'womans_clothes': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f45a.png?v7',
+  'womans_hat': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f452.png?v7',
+  'women_wrestling': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f93c-2640.png?v7',
+  'womens': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f6ba.png?v7',
+  'world_map': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f5fa.png?v7',
+  'worried': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f61f.png?v7',
+  'wrench': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f527.png?v7',
+  'writing_hand': 'https://assets-cdn.github.com/images/icons/emoji/unicode/270d.png?v7',
+  'x': 'https://assets-cdn.github.com/images/icons/emoji/unicode/274c.png?v7',
+  'yellow_heart': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f49b.png?v7',
+  'yemen': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1fe-1f1ea.png?v7',
+  'yen': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4b4.png?v7',
+  'yin_yang': 'https://assets-cdn.github.com/images/icons/emoji/unicode/262f.png?v7',
+  'yum': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f60b.png?v7',
+  'zambia': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ff-1f1f2.png?v7',
+  'zap': 'https://assets-cdn.github.com/images/icons/emoji/unicode/26a1.png?v7',
+  'zero': 'https://assets-cdn.github.com/images/icons/emoji/unicode/0030-20e3.png?v7',
+  'zimbabwe': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f1ff-1f1fc.png?v7',
+  'zipper_mouth_face': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f910.png?v7',
+  'zzz': 'https://assets-cdn.github.com/images/icons/emoji/unicode/1f4a4.png?v7'
 });
 
 /***/ }),
