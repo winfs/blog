@@ -13,11 +13,27 @@ use Illuminate\Http\Request;
 |
 */
 
-Route::middleware('auth:api')->get('/user', function (Request $request) {
-    return $request->user();
-});
+$api = app('Dingo\Api\Routing\Router');
 
-Route::group(['namespace' => 'api'], function() {
-    // Comment
-    Route::get('commentable/{commentableId}/comment', 'CommentController@show');
+$api->version('v1', function($api) {
+    $api->group(['middleware' => ['api.auth', 'admin'], 'namespace' => 'App\Http\Controllers\Api'], function($api) {
+        // User
+        $api->get('user/{id}/edit', 'UserController@edit');
+        $api->post('user/{id}/status', 'UserController@status');
+        $api->resource('user', 'UserController', ['except' => ['show']]);
+
+        // Article
+        $api->get('article/{id}/edit', 'ArticleController@edit')->name('api.article.edit');
+        $api->resource('article', 'ArticleController', [
+            'except' => ['show'],
+            'names' => [
+                'index' => 'api.article.index',
+                'store' => 'api.article.store',
+                'update' => 'api.article.update',
+                'destroy' => 'api.article.destroy',
+            ],
+        ]);
+
+        // Category
+    });
 });

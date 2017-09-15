@@ -17,7 +17,7 @@ class UsersTableSeeder extends Seeder
             [
                 'name' => 'admin',
                 'email' => 'childelins@gmail.com',
-                'password' => Hash::make('admin'),
+                'password' => Hash::make('lx123456'),
                 'status' => true,
                 'is_admin' => true,
                 'confirm_code' => str_random(64),

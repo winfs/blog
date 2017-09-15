@@ -1779,7 +1779,6 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
         var _this = this;
 
         var url = 'commentable/' + this.commentableId + '/comment';
-        console.log(url);
         this.$http.get(url, {
             params: {
                 commentable_type: this.commentableType

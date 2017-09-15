@@ -28,4 +28,9 @@ class ArticleRepository
     {
         return $this->model->where('title', 'like', "%{$key}%")->orderBy('published_at', 'desc')->get();
     }
+
+    public function syncTag($tags)
+    {
+        $this->model->tags()->sync($tags);
+    }
 }

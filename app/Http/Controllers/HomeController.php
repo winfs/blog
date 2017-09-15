@@ -14,6 +14,11 @@ class HomeController extends Controller
         $this->articles = $articles;
     }
 
+    public function dashboard()
+    {
+        return view('dashboard.index');
+    }
+
     public function search(Request $request)
     {
         $key = trim($request->input('q'));
