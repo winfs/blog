@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
-use Auth;
-use App\Http\Requests\ArticleRequest;
-use App\Repositories\ArticleRepository;
-use App\Transformers\ArticleTransformer;
+use Illuminate\Http\Request;
+use App\Http\Requests\CategoryRequest;
+use App\Repositories\CategoryRepository;
+use App\Transformers\CategoryTransformer;
 
-class ArticleController extends ApiController
+class CategoryController extends ApiController
 {
-    protected $article;
+    protected $category;
 
-    public function __construct(ArticleRepository $article)
+    public function __construct(CategoryRepository $category)
     {
-        $this->article = $article;
+        $this->category = $category;
     }
 
     /**
@@ -23,9 +23,15 @@ class ArticleController extends ApiController
      */
     public function index()
     {
-        $articles = $this->article->paginate();
+        $categories = $this->category->paginate();
+        return $this->response->paginator($categories, new CategoryTransformer());
+    }
 
-        return $this->response->paginator($articles, new ArticleTransformer());
+    public function getList()
+    {
+        $categories = $this->category->all();
+
+        return $this->response->collection($categories, new CategoryTransformer());
     }
 
     /**
@@ -44,18 +50,9 @@ class ArticleController extends ApiController
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(ArticleRequest $request)
+    public function store(CategoryRequest $request)
     {
-        $data = array_merge($request->all(), [
-            'user_id'      => Auth::id(),
-            'last_user_id' => Auth::id(),
-        ]);
-
-        $data['is_draft'] = isset($data['is_draft']);
-        $data['is_original'] = isset($data['is_original']);
-
-        $this->article->store($data);
-        $this->article->syncTag(json_decode($request->input('tags')));
+        $this->category->store($request->all());
 
         return $this->response->withNoContent();
     }
@@ -79,9 +76,9 @@ class ArticleController extends ApiController
      */
     public function edit($id)
     {
-        $article = $this->article->find($id);
+        $category = $this->category->find($id);
 
-        return $this->response->item($article, new ArticleTransformer());
+        return $this->response->item($category, new CategoryTransformer()); 
     }
 
     /**
@@ -91,15 +88,9 @@ class ArticleController extends ApiController
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function update(ArticleRequest $request, $id)
+    public function update(CategoryRequest $request, $id)
     {
-        $data = array_merge($request->all(), [
-            'last_user_id' => Auth::id(),
-            'slug'         => str_slug($request->input('title')),
-        ]);
-
-        $this->article->update($id, $data);
-        $this->article->syncTag(json_decode($request->input('tags')));
+        $this->category->update($id, $request->all());
 
         return $this->response->withNoContent();
     }
@@ -112,7 +103,7 @@ class ArticleController extends ApiController
      */
     public function destroy($id)
     {
-        $this->article->delete($id);
+        $this->category->delete($id);
 
         return $this->response->withNoContent();
     }

@@ -2,7 +2,7 @@
 
 namespace App\Repositories;
 
-trait Repository
+trait BaseRepository
 {
     public function all()
     {

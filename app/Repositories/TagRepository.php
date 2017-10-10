@@ -6,7 +6,7 @@ use App\Models\Tag;
 
 class TagRepository
 {
-    use Repository;
+    use BaseRepository;
 
     protected $model;
 

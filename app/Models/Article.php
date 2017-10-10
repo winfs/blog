@@ -12,8 +12,10 @@ class Article extends Model
 {
     use SoftDeletes;
 
+    // 需要被转换成日期的属性
     protected $dates = ['published_at', 'created_at', 'deleted_at'];
 
+    // 可以被批量赋值的属性
     protected $fillable = [
         'category_id',
         'user_id',
@@ -33,6 +35,7 @@ class Article extends Model
     {
         parent::boot();
 
+        // 应用全局作用域
         static::addGlobalScope(new DraftScope());
     }
 

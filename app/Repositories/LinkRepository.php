@@ -6,7 +6,7 @@ use App\Models\Link;
 
 class LinkRepository
 {
-    use Repository;
+    use BaseRepository;
 
     protected $model;
 

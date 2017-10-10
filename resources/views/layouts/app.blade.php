@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ app()->getLocale() }}">
+<html lang="{{ config('app.locale') }}">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -14,18 +14,19 @@
 
     <title>@yield('title', config('app.name'))</title>
 
+    <!-- Styles -->
     <link rel="stylesheet" href="{{ asset('css/home.css') }}">
+
+    @yield('styles')
 
     <!-- Scripts -->
     <script>
         window.Language = '{{ config('app.locale') }}';
 
-        window.Laravel = <?php echo json_encode([
+        window.Laravel = {!! json_encode([
             'csrfToken' => csrf_token(),
-        ]); ?>
+        ]) !!};
     </script>
-
-    @yield('styles')
 </head>
 <body>
     <div id="app">

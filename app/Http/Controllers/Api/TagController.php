@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
-use Auth;
-use App\Http\Requests\ArticleRequest;
-use App\Repositories\ArticleRepository;
-use App\Transformers\ArticleTransformer;
+use Illuminate\Http\Request;
+use App\Http\Requests\TagRequest;
+use App\Repositories\TagRepository;
+use App\Transformers\TagTransformer;
 
-class ArticleController extends ApiController
+class TagController extends ApiController
 {
-    protected $article;
+    protected $tag;
 
-    public function __construct(ArticleRepository $article)
+    public function __construct(TagRepository $tag)
     {
-        $this->article = $article;
+        $this->tag = $tag;
     }
 
     /**
@@ -23,9 +23,9 @@ class ArticleController extends ApiController
      */
     public function index()
     {
-        $articles = $this->article->paginate();
+        $tags = $this->tag->paginate();
 
-        return $this->response->paginator($articles, new ArticleTransformer());
+        return $this->response->paginator($tags, new TagTransformer());
     }
 
     /**
@@ -44,18 +44,9 @@ class ArticleController extends ApiController
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(ArticleRequest $request)
+    public function store(TagRequest $request)
     {
-        $data = array_merge($request->all(), [
-            'user_id'      => Auth::id(),
-            'last_user_id' => Auth::id(),
-        ]);
-
-        $data['is_draft'] = isset($data['is_draft']);
-        $data['is_original'] = isset($data['is_original']);
-
-        $this->article->store($data);
-        $this->article->syncTag(json_decode($request->input('tags')));
+        $this->tag->store($request->all());
 
         return $this->response->withNoContent();
     }
@@ -79,9 +70,9 @@ class ArticleController extends ApiController
      */
     public function edit($id)
     {
-        $article = $this->article->find($id);
+        $tag = $this->tag->find($id);
 
-        return $this->response->item($article, new ArticleTransformer());
+        return $this->response->item($tag, new TagTransformer());
     }
 
     /**
@@ -91,15 +82,9 @@ class ArticleController extends ApiController
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function update(ArticleRequest $request, $id)
+    public function update(Request $request, $id)
     {
-        $data = array_merge($request->all(), [
-            'last_user_id' => Auth::id(),
-            'slug'         => str_slug($request->input('title')),
-        ]);
-
-        $this->article->update($id, $data);
-        $this->article->syncTag(json_decode($request->input('tags')));
+        $this->tag->update($id, $request->except('tag'));
 
         return $this->response->withNoContent();
     }
@@ -112,7 +97,7 @@ class ArticleController extends ApiController
      */
     public function destroy($id)
     {
-        $this->article->delete($id);
+        $this->tag->delete($id);
 
         return $this->response->withNoContent();
     }

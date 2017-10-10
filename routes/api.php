@@ -35,5 +35,16 @@ $api->version('v1', function($api) {
         ]);
 
         // Category
+        $api->get('categories', 'CategoryController@getList');
+        $api->get('category/{id}/edit', 'CategoryController@edit');
+        $api->resource('category', 'CategoryController', ['except' => ['show']]);
+
+        // Tag
+        $api->get('tag/{id}/edit', 'TagController@edit');
+        $api->resource('tag', 'TagController', ['except' => ['show']]);
+
+        // Link
+        $api->get('link/{id}/edit', 'LinkController@edit');
+        $api->resource('link', 'LinkController', ['except' => ['show']]);
     });
 });

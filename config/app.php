@@ -184,6 +184,7 @@ return [
         Mpociot\LaravelTestFactoryHelper\TestFactoryHelperServiceProvider::class,
         Barryvdh\LaravelIdeHelper\IdeHelperServiceProvider::class,
         Laravel\Socialite\SocialiteServiceProvider::class,
+        JellyBool\Translug\TranslugServiceProvider::class,
         Dingo\Api\Provider\LaravelServiceProvider::class,
 
     ],
@@ -237,6 +238,7 @@ return [
 
         'Debugbar' => Barryvdh\Debugbar\Facade::class,
         'Socialite' => Laravel\Socialite\Facades\Socialite::class,
+        'Translug' => JellyBool\Translug\TranslugFacade::class,
     ],
 
 ];

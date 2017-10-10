@@ -7,7 +7,7 @@ use App\Scopes\StatusScope;
 
 class UserRepository
 {
-    use Repository;
+    use BaseRepository;
 
     protected $model;
 
